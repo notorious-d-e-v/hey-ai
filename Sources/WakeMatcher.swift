@@ -131,30 +131,62 @@ enum WakeMatcher {
     }
 }
 
-/// "Send it" — said at the end of a Claude Code dictation to send the prompt.
+/// How you tell HeyVoice a Claude Code dictation is finished.
 enum SendPhrase {
-    static let endings: [[String]] = [["send", "it"], ["sent", "it"], ["send", "that"]]
+    /// Send whenever they end what you said: "…fix the bug, send it".
+    static let anywhere = phrases(["send it", "sent it", "send that", "send message", "send the message"])
+    /// Send only when said on their own after a pause, so "…and press enter" can't fire.
+    static let standalone = phrases([
+        "enter", "send", "submit", "done", "i'm done", "press enter", "hit enter", "go ahead",
+        "that's it", "that's all",
+    ])
+    /// Answers to the "Done?" nudge. They can also lead a phrase: "yes, send it".
+    static let answers = phrases(["yes", "yeah", "yep", "yup", "ok", "okay", "sure", "yes please"])
+        .sorted { $0.count > $1.count }
 
-    /// True when the transcript ends with the send phrase.
-    static func ends(_ transcript: String) -> Bool {
-        let words = WakeMatcher.normalize(transcript)
-        return endings.contains { words.count >= $0.count && Array(words.suffix($0.count)) == $0 }
+    private static func phrases(_ list: [String]) -> [[String]] { list.map(WakeMatcher.normalize) }
+
+    /// The words that make up a send command at the end of what was heard, or nil.
+    /// - words: everything heard since dictation started
+    /// - utterance: the words since the last pause
+    /// - nudged: the utterance began after the "Done?" nudge appeared
+    static func command(words: [String], utterance: [String], nudged: Bool) -> [String]? {
+        if !utterance.isEmpty {
+            let answer = answers.first { utterance.starts(with: $0) } ?? []
+            let rest = Array(utterance.dropFirst(answer.count))
+            if !rest.isEmpty && (anywhere.contains(rest) || standalone.contains(rest)) { return utterance }
+            if nudged && rest.isEmpty && !answer.isEmpty { return utterance }
+        }
+        return anywhere.first { words.count >= $0.count && Array(words.suffix($0.count)) == $0 }
     }
 
-    private static let trailingPattern = try? NSRegularExpression(
-        pattern: #"[\s,;:–—-]*\b(send it|sent it|send that)\b[\s.!?…]*$"#, options: [.caseInsensitive])
-
-    /// How many characters at the end of dictated text are the send phrase (with the
-    /// punctuation and spaces around it); 0 when it doesn't end with one.
-    static func trailingLength(_ text: String) -> Int {
-        guard let regex = trailingPattern,
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range, in: text) else { return 0 }
-        return text[range].count
+    /// How many characters at the end of the dictated text are the spoken command (plus the
+    /// spaces and commas before it); 0 when the text doesn't end with it. Close spellings
+    /// count ("Inter." for "enter"), since Claude's dictation hears words its own way.
+    static func trailingLength(_ text: String, command: [String]) -> Int {
+        guard !command.isEmpty, let regex = try? NSRegularExpression(pattern: #"[\p{L}\p{N}']+"#) else { return 0 }
+        let tokens = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            .compactMap { Range($0.range, in: text) }
+        guard tokens.count >= command.count else { return 0 }
+        let tail = Array(tokens.suffix(command.count))
+        for (range, expected) in zip(tail, command) {
+            let word = WakeMatcher.normalize(String(text[range])).joined()
+            guard word == expected || (expected.count >= 4 && WakeMatcher.levenshtein(word, expected) <= 1) else {
+                return 0
+            }
+        }
+        guard text[tail.last!.upperBound...].allSatisfy({ $0.isWhitespace || ".!?…".contains($0) }) else { return 0 }
+        var start = tail.first!.lowerBound
+        while start > text.startIndex {
+            let previous = text.index(before: start)
+            guard text[previous].isWhitespace || ",;:–—-".contains(text[previous]) else { break }
+            start = previous
+        }
+        return text.distance(from: start, to: text.endIndex)
     }
 
-    /// Dictated text with a trailing "send it" removed.
-    static func strip(_ text: String) -> String {
-        String(text.dropLast(trailingLength(text))).trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Dictated text with the spoken command removed.
+    static func strip(_ text: String, command: [String]) -> String {
+        String(text.dropLast(trailingLength(text, command: command))).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

@@ -20,11 +20,6 @@ func expect(_ transcript: String, _ expected: WakeTarget?, mayContinue: Bool = f
           "\"\(transcript)\" → \(got?.target.rawValue ?? "nothing")\(got?.mayContinue == true ? " (may continue)" : ""), expected \(expected?.rawValue ?? "nothing")\(mayContinue ? " (may continue)" : "")")
 }
 
-func expectStrip(_ text: String, _ expected: String) {
-    let got = SendPhrase.strip(text)
-    check(got == expected, "strip(\"\(text)\") → \"\(got)\", expected \"\(expected)\"")
-}
-
 // ChatGPT
 expect("Hey Chatty", .chatgpt)
 expect("hey, chatty!", .chatgpt)
@@ -75,18 +70,46 @@ expect("hey Chad", nil)
 expect("hey clouds", nil)
 expect("hey catty", nil)
 
-// Send phrase
-check(SendPhrase.ends("fix the failing test send it"), "ends: plain")
-check(SendPhrase.ends("Fix the failing test. Send it."), "ends: punctuated")
-check(SendPhrase.ends("fix it and sent it"), "ends: sent it")
-check(!SendPhrase.ends("send it to the API and log the response"), "ends: mid-sentence")
-check(!SendPhrase.ends("fix the test"), "ends: absent")
-expectStrip("Fix the failing test. Send it.", "Fix the failing test.")
-expectStrip("fix the failing test send it", "fix the failing test")
-expectStrip("fix the failing test, send it!", "fix the failing test")
-expectStrip("Send it.", "")
-expectStrip("Please send it to the API", "Please send it to the API")
-expectStrip("No phrase here", "No phrase here")
+// Send commands
+func words(_ text: String) -> [String] { WakeMatcher.normalize(text) }
+
+func expectCommand(_ heard: String, utterance: String? = nil, nudged: Bool = false, _ expected: String?) {
+    let got = SendPhrase.command(words: words(heard), utterance: words(utterance ?? heard), nudged: nudged)
+    check(got == expected.map(words), "command(\"\(heard)\", utterance: \"\(utterance ?? heard)\", nudged: \(nudged)) → \(got?.joined(separator: " ") ?? "nil"), expected \(expected ?? "nil")")
+}
+
+expectCommand("fix the failing test send it", "send it")
+expectCommand("Fix the failing test. Send it.", "send it")
+expectCommand("fix it and sent it", "sent it")
+expectCommand("fix the test", nil)
+expectCommand("send it to the API and log the response", nil)
+expectCommand("fix the failing test enter", utterance: "enter", "enter")
+expectCommand("fix the failing test submit", utterance: "submit", "submit")
+expectCommand("fix the failing test that's it", utterance: "that's it", "that's it")
+expectCommand("fix the failing test okay enter", utterance: "okay enter", "okay enter")
+expectCommand("fix the failing test yes send it", utterance: "yes send it", "yes send it")
+expectCommand("and then press enter", nil)
+expectCommand("and then press enter", utterance: "and then press enter", nil)
+expectCommand("fix the failing test yes", utterance: "yes", nudged: true, "yes")
+expectCommand("fix the failing test yes", utterance: "yes", nil)
+expectCommand("fix the failing test yes and also the lint", utterance: "yes and also the lint", nudged: true, nil)
+
+func expectStrip(_ text: String, _ command: String, _ expected: String) {
+    let got = SendPhrase.strip(text, command: words(command))
+    check(got == expected, "strip(\"\(text)\", \"\(command)\") → \"\(got)\", expected \"\(expected)\"")
+}
+
+expectStrip("Fix the failing test. Send it.", "send it", "Fix the failing test.")
+expectStrip("fix the failing test send it", "send it", "fix the failing test")
+expectStrip("fix the failing test, send it!", "send it", "fix the failing test")
+expectStrip("Fix the failing test. Enter.", "enter", "Fix the failing test.")
+expectStrip("Fix the failing test. Inter.", "enter", "Fix the failing test.")
+expectStrip("Fix the failing test. Yes, send it.", "yes send it", "Fix the failing test.")
+expectStrip("Fix the failing test. That's it.", "that's it", "Fix the failing test.")
+expectStrip("Send it.", "send it", "")
+expectStrip("Please send it to the API", "send it", "Please send it to the API")
+expectStrip("Press enter to continue", "enter", "Press enter to continue")
+expectStrip("No command here", "enter", "No command here")
 
 if failures == 0 {
     print("matcher: all \(count) cases passed")

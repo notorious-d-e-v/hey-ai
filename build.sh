@@ -11,8 +11,9 @@ swiftc -O -swift-version 5 Sources/WakeMatcher.swift Tests/main.swift -o build/m
 echo "· compiling HeyVoice"
 swiftc -O -swift-version 5 \
   Sources/main.swift Sources/AppDelegate.swift Sources/WakeListener.swift \
-  Sources/WakeMatcher.swift Sources/Launcher.swift Sources/Log.swift \
-  -framework AppKit -framework AVFoundation -framework Speech \
+  Sources/WakeMatcher.swift Sources/Launcher.swift Sources/NudgePanel.swift Sources/MicActivity.swift \
+  Sources/Log.swift \
+  -framework AppKit -framework AVFoundation -framework Speech -framework CoreAudio \
   -framework ApplicationServices -framework ServiceManagement \
   -o build/HeyVoice-bin
 

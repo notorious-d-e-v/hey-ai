@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let menu = NSMenu()
     private let listener = WakeListener()
     private let launcher = Launcher()
+    private let nudge = NudgePanel()
+    /// Where the Claude Code prompt box is, so the nudge can sit just above it.
+    private var nudgeAnchor: CGRect?
 
     private var listenerState: WakeListener.State = .stopped
     private var lastHeard = ""
@@ -31,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // heyvoice://open/<chatgpt|codex|claude|claude-code>, heyvoice://send/claude-code,
-        // heyvoice://dump/claude
+        // heyvoice://dump/<claude|chatgpt|codex>
         NSAppleEventManager.shared().setEventHandler(
             self, andSelector: #selector(handleURLEvent(_:reply:)),
             forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
@@ -49,18 +52,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         listener.onHeard = { [weak self] text in self?.lastHeard = text }
         listener.onWake = { [weak self] match, heard in
+            // Saying a wake phrase while talking to an assistant shouldn't open a new one.
+            if let busy = MicActivity.assistantListening() {
+                Log.info("heard \"\(match.phrase)\" but \(busy) is already listening; ignored")
+                self?.lastAction = "Ignored “\(match.target.wakePhrase)”: \(busy) is already listening"
+                return
+            }
             Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)")
             self?.trigger(match.target)
         }
-        listener.onSendPhrase = { [weak self] in
-            Log.info("heard “send it”")
-            self?.sendClaudeCodePrompt()
-            self?.updateIcon()
+        listener.onSendPhrase = { [weak self] command in
+            Log.info("heard “\(command.joined(separator: " "))” → send")
+            self?.sendClaudeCodePrompt(command: command)
+        }
+        listener.onNudge = { [weak self] show in
+            guard let self else { return }
+            if show {
+                self.nudge.show("Done? Say “send it” or “enter” — or keep talking", above: self.nudgeAnchor)
+                let tick = NSSound(named: "Tink")
+                tick?.volume = 0.3
+                tick?.play()
+            } else {
+                self.nudge.hide()
+            }
         }
         listener.onSendWatchEnded = { [weak self] reason in
+            guard let self else { return }
             Log.info("Claude Code: \(reason)")
-            self?.lastAction = "Claude Code: \(reason)"
-            self?.updateIcon()
+            self.lastAction = "Claude Code: \(reason)"
+            self.launcher.stopWatchingDictation()
+            self.nudge.hide()
+            self.updateIcon()
         }
 
         Log.info("HeyVoice started")
@@ -104,16 +126,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 self.report(result.message)
                 if result.awaitingSend {
+                    self.nudgeAnchor = result.anchor
                     self.listener.watchForSend()
+                    self.launcher.watchDictation { [weak self] in
+                        DispatchQueue.main.async {
+                            guard let self, self.listener.isWatchingForSend else { return }
+                            Log.info("Claude Code: dictation stopped on its own → send")
+                            self.listener.stopWatchingForSend()
+                            self.sendClaudeCodePrompt(command: nil)
+                        }
+                    }
                     self.updateIcon()
                 }
             }
         }
     }
 
-    private func sendClaudeCodePrompt() {
+    /// `command` is the spoken send command to remove from the prompt; nil when dictation
+    /// stopped on its own or Send Now was chosen.
+    private func sendClaudeCodePrompt(command: [String]?) {
+        launcher.stopWatchingDictation()
+        nudge.hide()
+        updateIcon()
         NSSound(named: "Pop")?.play()
-        launcher.finishClaudeCodeDictation { [weak self] result in
+        launcher.finishClaudeCodeDictation(command: command) { [weak self] result in
             Log.info(result)
             DispatchQueue.main.async { self?.report(result) }
         }
@@ -135,8 +171,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case ("open", _) where WakeTarget(rawValue: name) != nil:
             trigger(WakeTarget(rawValue: name)!)
         case ("send", "claude-code"):
-            listener.cancelSendWatch()
-            sendClaudeCodePrompt()
+            sendNow()
+        case ("dump", "chatgpt"), ("dump", "codex"):
+            launcher.dumpAppControls(Launcher.codexBundleID) { result in
+                Log.info(result)
+                DispatchQueue.main.async { self.lastAction = result }
+            }
         case ("dump", "claude"):
             launcher.dumpClaudeControls { result in
                 Log.info(result)
@@ -163,11 +203,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func sendNow() {
-        listener.cancelSendWatch()
-        sendClaudeCodePrompt()
+        listener.stopWatchingForSend()
+        sendClaudeCodePrompt(command: nil)
     }
 
-    @objc private func stopWaitingForSend() { listener.cancelSendWatch() }
+    @objc private func stopWaitingForSend() {
+        listener.stopWatchingForSend()
+        launcher.stopWatchingDictation()
+        nudge.hide()
+        lastAction = "Claude Code: stopped waiting to send"
+        updateIcon()
+    }
 
     @objc private func dumpClaude() {
         launcher.dumpClaudeControls { result in
@@ -211,9 +257,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(info(statusLine))
         if listener.isWatchingForSend {
-            menu.addItem(info("Dictating to Claude Code — say “send it” to send"))
+            menu.addItem(info("Dictating to Claude Code — say “send it” or “enter”"))
             menu.addItem(item("Send Now", #selector(sendNow)))
-            menu.addItem(item("Stop Waiting for “Send It”", #selector(stopWaitingForSend)))
+            menu.addItem(item("Don’t Send", #selector(stopWaitingForSend)))
         }
         menu.addItem(info("“Hey Chatty” → ChatGPT voice"))
         menu.addItem(info("“Hey Codex” → Codex voice"))

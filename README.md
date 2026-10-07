@@ -4,12 +4,21 @@ A menu-bar Mac app that is always listening for four wake phrases:
 
 | Say | It opens |
 | --- | --- |
-| **"Hey Chatty"** | ChatGPT (ChatGPT Classic), in a new voice conversation |
-| **"Hey Codex"** | The ChatGPT + Codex app (`ChatGPT.app`), in a new voice chat |
+| **"Hey Chatty"** | ChatGPT, in a new standalone voice chat (no project folder) |
+| **"Hey Codex"** | Codex, in a new voice chat in your current folder |
 | **"Hey Claude"** | Claude, in a new chat with voice mode on |
 | **"Hey Claude Code"** | A new Claude Code session in the desktop app's Code tab, with dictation on |
 
-Claude Code has no back-and-forth voice mode, only dictation. Speak your prompt, then end with **"send it"**. HeyVoice waits for about a second of quiet after "send it", then stops dictation, deletes "send it" from the prompt, and presses Return. A pause alone never sends; with no "send it", HeyVoice stops waiting after 90 seconds of silence or 5 minutes, and the prompt stays unsent.
+Claude Code has no back-and-forth voice mode, only dictation. Speak your prompt, then send it any of these ways:
+
+- **End with "send it"** (or "send that", "send the message"). It sends after about a second of quiet.
+- **Pause, then say one word on its own**: "enter", "send", "submit" or "done" ("that's it" and "go ahead" work too). It has to be its own utterance, so a prompt ending "…and press enter" doesn't send.
+- **Answer the nudge.** After 2 seconds of quiet, a small "Done?" bubble appears above the prompt box with a soft tick. A plain "yes", "yeah" or "okay" then sends. If you keep talking, the bubble hides and dictation carries on.
+- **Let Claude stop listening.** When Claude's dictation turns itself off, or you click its mic button, HeyVoice sends whatever is in the prompt box.
+
+HeyVoice stops dictation, deletes the spoken command from the prompt, and presses Return. A pause by itself never sends.
+
+Wake phrases are ignored while Claude or the ChatGPT app is already using the microphone (a voice chat or dictation is open), so talking to an assistant can't open a second one. HeyVoice checks this with Core Audio, which reports every process that is capturing input.
 
 Wake-phrase detection uses Apple's on-device speech recognizer, so audio never leaves the Mac. Nothing you say is logged. The log only records wake events and errors.
 
@@ -32,15 +41,14 @@ On first launch, macOS asks for three permissions:
 
 ## How each app is opened
 
-- **ChatGPT**: HeyVoice opens ChatGPT Classic's `chatgpt://new-voice-conversation` link. It starts the app first if it isn't running, because the link can get lost while the app is launching.
-- **Codex**: HeyVoice brings the ChatGPT + Codex app forward, presses ⌘N for a new chat, then ⌃⇧V, which is the app's own "start voice chat" shortcut.
+- **ChatGPT and Codex** both use the ChatGPT + Codex app (`ChatGPT.app`). ChatGPT Classic no longer has a voice button: its `chatgpt://new-voice-conversation` link opens the app without starting voice. HeyVoice brings the app forward and opens a new chat, then presses ⌃⇧V, the app's own "start voice chat" shortcut. "Hey Chatty" opens the chat with ⌘⌥O ("New standalone chat", no project folder); "Hey Codex" uses ⌘N ("New Chat" in the current folder).
 - **Claude**: HeyVoice opens `claude://claude.ai/new`, then presses the composer's **Use voice mode** button through Accessibility. Older claude.ai builds left that button unnamed; for those, HeyVoice falls back to the rightmost unnamed button in the composer's bottom row. It confirms voice mode started when the button stops offering "Use voice mode".
 - **Claude Code**: HeyVoice opens `claude://code/new` (a new session in the folder Claude used last), then presses ⌘D, Claude's "toggle dictation" shortcut. If ⌘D doesn't start recording, it clicks the mic button instead. While you dictate, wake phrases are ignored, so words in your prompt can't open anything.
 
 ## Menu
 
 - **Pause / Resume Listening**: turns the microphone off and on.
-- **Send Now / Stop Waiting for "Send It"**: shown while a Claude Code dictation is open.
+- **Send Now / Don't Send**: shown while a Claude Code dictation is open.
 - **Test**: run any of the four actions without speaking, or write Claude's on-screen controls to the log. That dump is how to fix the Claude button lookup if Claude changes its page.
 - **Launch at Login**.
 - **Allow Online Speech Recognition**: off by default. It only matters when on-device recognition is unavailable, and it sends microphone audio to Apple.

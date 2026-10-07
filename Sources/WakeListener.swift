@@ -6,8 +6,9 @@ import Speech
 /// wake phrase in every partial transcript. Recognition tasks are rotated every 50 s (and
 /// right after a wake) so transcripts stay short and an old phrase can never fire twice.
 ///
-/// While a Claude Code dictation is open it instead waits for "send it" to end the
-/// transcript, and wake phrases are ignored so dictated text can't launch anything.
+/// While a Claude Code dictation is open it instead listens for a send command ("send it",
+/// or "enter" on its own after a pause), nudges after 2 s of quiet, and ignores wake
+/// phrases so dictated text can't launch anything.
 final class WakeListener {
     enum State: Equatable {
         case stopped
@@ -18,9 +19,12 @@ final class WakeListener {
     var onWake: ((WakeMatch, String) -> Void)?
     var onHeard: ((String) -> Void)?
     var onState: ((State) -> Void)?
-    /// "send it" ended the transcript while watching for it.
-    var onSendPhrase: (() -> Void)?
-    /// The send watch ended without "send it" (timeout or long silence).
+    /// A send command ended the transcript; passes the command's words so they can be
+    /// removed from the prompt.
+    var onSendPhrase: (([String]) -> Void)?
+    /// Show (true) or hide (false) the "Done?" nudge.
+    var onNudge: ((Bool) -> Void)?
+    /// The send watch timed out or listening stopped.
     var onSendWatchEnded: ((String) -> Void)?
     /// Use Apple's servers when on-device recognition isn't available. Off by default,
     /// because it would stream the always-on microphone to Apple.
@@ -46,44 +50,64 @@ final class WakeListener {
     private var sendWatchStarted = Date.distantPast
     private var lastHeardChange = Date.distantPast
     private var lastHeardText = ""
+    /// Word count of the transcript before the current utterance (speech after a pause).
+    private var utteranceStart = 0
+    private var utteranceStartedAt = Date.distantPast
+    private var nudgedAt: Date?
     private var sendTimer: Timer?
     private var sendWatchTimer: Timer?
 
     private static let rotateInterval: TimeInterval = 50
     private static let cooldown: TimeInterval = 3
-    private static let continuationWait: TimeInterval = 0.8
-    /// Silence after "send it" before it counts, so "send it to the API…" doesn't fire.
+    private static let continuationWait: TimeInterval = 0.5
+    /// Quiet after a send command before it counts, so "send it to the API…" doesn't fire.
     private static let sendSettle: TimeInterval = 1.0
-    private static let sendWatchLimit: TimeInterval = 300
-    private static let sendWatchSilenceLimit: TimeInterval = 90
+    /// Quiet that splits speech into utterances ("…fix the bug. [pause] Enter.").
+    private static let utterancePause: TimeInterval = 0.8
+    private static let nudgeAfter: TimeInterval = 2.0
+    private static let sendWatchLimit: TimeInterval = 600
 
-    /// Start waiting for "send it" (after Claude Code dictation has started).
+    /// Start listening for a send command (after Claude Code dictation has started).
     func watchForSend() {
         isWatchingForSend = true
         sendWatchStarted = Date()
         lastHeardChange = Date()
+        nudgedAt = nil
         sendWatchTimer?.invalidate()
-        sendWatchTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            guard let self, self.isWatchingForSend else { return }
-            if Date().timeIntervalSince(self.sendWatchStarted) > Self.sendWatchLimit {
-                self.endSendWatch("stopped waiting for “send it” after 5 minutes")
-            } else if Date().timeIntervalSince(self.lastHeardChange) > Self.sendWatchSilenceLimit {
-                self.endSendWatch("stopped waiting for “send it” after 90 s of silence")
-            }
+        sendWatchTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.checkSendWatch()
         }
         startTask()
     }
 
-    func cancelSendWatch() {
-        endSendWatch("stopped waiting for “send it”")
-    }
-
-    private func endSendWatch(_ reason: String) {
+    /// Stop listening for a send command without reporting it (the caller is handling it).
+    func stopWatchingForSend() {
         guard isWatchingForSend else { return }
         isWatchingForSend = false
         sendTimer?.invalidate()
         sendWatchTimer?.invalidate()
+        if nudgedAt != nil { onNudge?(false) }
+        nudgedAt = nil
+    }
+
+    private func endSendWatch(_ reason: String) {
+        guard isWatchingForSend else { return }
+        stopWatchingForSend()
         onSendWatchEnded?(reason)
+    }
+
+    /// Nudge once per pause, after something has been said.
+    private func checkSendWatch() {
+        guard isWatchingForSend else { return }
+        if Date().timeIntervalSince(sendWatchStarted) > Self.sendWatchLimit {
+            return endSendWatch("stopped waiting for a send command after 10 minutes")
+        }
+        let quiet = Date().timeIntervalSince(lastHeardChange)
+        let saidSomething = lastHeardChange > sendWatchStarted
+        if quiet >= Self.nudgeAfter, saidSomething, nudgedAt == nil || nudgedAt! < lastHeardChange {
+            nudgedAt = Date()
+            onNudge?(true)
+        }
     }
 
     func start() {
@@ -178,12 +202,13 @@ final class WakeListener {
         generation += 1
         let gen = generation
         lastHeardText = ""
+        utteranceStart = 0
 
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
         newRequest.shouldReportPartialResults = true
         newRequest.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
         newRequest.contextualStrings = isWatchingForSend
-            ? ["send it"]
+            ? ["send it", "enter"]
             : ["Hey Chatty", "Hey Codex", "Hey Claude", "Hey Claude Code", "Chatty", "Codex", "Claude"]
         newRequest.addsPunctuation = false
 
@@ -211,6 +236,10 @@ final class WakeListener {
             let text = result.bestTranscription.formattedString
             onHeard?(text)
             if text != lastHeardText {
+                if lastHeardText.isEmpty || Date().timeIntervalSince(lastHeardChange) >= Self.utterancePause {
+                    utteranceStart = WakeMatcher.normalize(lastHeardText).count
+                    utteranceStartedAt = Date()
+                }
                 lastHeardText = text
                 lastHeardChange = Date()
             }
@@ -251,25 +280,39 @@ final class WakeListener {
         startTask()
     }
 
-    /// "hey claude" could be the start of "hey claude code": wait a moment for the next word.
+    /// "hey claude" could be the start of "hey claude code": wait until the transcript has
+    /// been quiet for a moment, restarting the wait whenever it changes (the recognizer can
+    /// deliver "code" well after "claude").
     private func holdForContinuation(_ match: WakeMatch, text: String) {
-        guard pendingMatch == nil else { return }
+        if let pending = pendingMatch, pending.text == text { return }
         pendingMatch = (match, text)
+        pendingTimer?.invalidate()
         pendingTimer = Timer.scheduledTimer(withTimeInterval: Self.continuationWait, repeats: false) { [weak self] _ in
             guard let self, let pending = self.pendingMatch else { return }
+            // What followed "hey claude" (for spotting new mishearings of "code").
+            let words = WakeMatcher.normalize(self.lastHeardText)
+            if let i = words.lastIndex(where: WakeMatcher.isClaude) {
+                Log.info("after “\(words[i])” heard: “\(words[(i + 1)...].prefix(4).joined(separator: " "))”")
+            }
             self.fire(pending.match, text: pending.text)
         }
     }
 
-    /// Fires once "send it" has ended the transcript and nothing new was heard for a second.
+    /// Fires once a send command ends the transcript and a second passes with nothing new.
     private func checkSendPhrase(_ text: String) {
         sendTimer?.invalidate()
-        guard SendPhrase.ends(text) else { return }
+        let words = WakeMatcher.normalize(text)
+        let utterance = Array(words.dropFirst(min(utteranceStart, words.count)))
+        let nudged = nudgedAt.map { utteranceStartedAt >= $0 } ?? false
+        guard let command = SendPhrase.command(words: words, utterance: utterance, nudged: nudged) else {
+            // Talking again after the nudge: hide it until the next pause.
+            if nudgedAt != nil && !utterance.isEmpty { onNudge?(false) }
+            return
+        }
         sendTimer = Timer.scheduledTimer(withTimeInterval: Self.sendSettle, repeats: false) { [weak self] _ in
             guard let self, self.isWatchingForSend, self.lastHeardText == text else { return }
-            self.isWatchingForSend = false
-            self.sendWatchTimer?.invalidate()
-            self.onSendPhrase?()
+            self.stopWatchingForSend()
+            self.onSendPhrase?(command)
             self.startTask()
         }
     }
