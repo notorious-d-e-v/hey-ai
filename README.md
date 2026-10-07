@@ -1,86 +1,114 @@
-# HeyVoice
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/readme/banner-dark.png">
+    <img src="brand/readme/banner-light.png" alt="Hey AI. Say “Hey Claude” and Claude opens, ready to talk." width="100%">
+  </picture>
+</p>
 
-A menu-bar Mac app that is always listening for four wake phrases:
+**Say an assistant's name and it opens, ready to talk.** Hey AI is a tiny Mac menu-bar app that listens for *“Hey Claude”*, *“Hey Chatty”*, *“Hey Codex”* and *“Hey Claude Code”*, and opens that assistant with voice already on. Speech is recognized on your Mac, and nothing is recorded.
 
-| Say | It opens |
-| --- | --- |
-| **"Hey Chatty"** | ChatGPT, in a new standalone voice chat (no project folder) |
-| **"Hey Codex"** | Codex, in a new voice chat in your current folder |
-| **"Hey Claude"** | Claude, in a new chat with voice mode on |
-| **"Hey Claude Code"** | A new Claude Code session in the desktop app's Code tab, with dictation on |
-
-Claude Code has no back-and-forth voice mode, only dictation. Speak your prompt, then send it any of these ways:
-
-- **End with "send it"** (or "send that", "send the message"). It sends after about a second of quiet.
-- **Pause, then say one word on its own**: "enter", "send", "submit" or "done" ("that's it" and "go ahead" work too). It has to be its own utterance, so a prompt ending "…and press enter" doesn't send.
-- **Answer the nudge.** After 2 seconds of quiet, a small "Done?" bubble appears above the prompt box with a soft tick. A plain "yes", "yeah" or "okay" then sends. If you keep talking, the bubble hides and dictation carries on.
-- **Let Claude stop listening.** When Claude's dictation turns itself off, or you click its mic button, HeyVoice sends whatever is in the prompt box.
-
-HeyVoice stops dictation, deletes the spoken command from the prompt, and presses Return. A pause by itself never sends.
-
-Say **"stop listening"** (or "end voice chat", "end the call", "hang up") to end whatever is listening right away, without waiting for the app to wind down. HeyVoice presses Claude's Stop button, presses ⌃⇧V again in the ChatGPT app (it starts or stops voice), or stops a Claude Code dictation without sending it. The phrase has to end what you said, so "hang up the laundry" does nothing.
-
-Wake phrases are ignored while Claude or the ChatGPT app is already using the microphone (a voice chat or dictation is open), so talking to an assistant can't open a second one. HeyVoice checks this with Core Audio, which reports every process that is capturing input.
-
-Wake-phrase detection uses Apple's on-device speech recognizer, so audio never leaves the Mac. Nothing you say is logged. The log only records wake events and errors.
-
-## Build and run
+## Install
 
 ```bash
-./build.sh
-open build/HeyVoice.app
+curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/install.sh | bash
 ```
 
-Only the Command Line Tools are needed, not Xcode. A waveform icon appears in the menu bar.
+Paste it into Terminal. About five seconds later Hey AI is in Applications and its setup window is open. Allow three permissions there, then say **“Hey Claude”**.
 
-On first launch, macOS asks for three permissions:
+You need macOS 14 or later (Apple silicon or Intel) and the [Claude](https://claude.ai/download) and/or [ChatGPT](https://openai.com/chatgpt/download/) desktop app.
 
-1. **Microphone**: to hear the wake phrase.
-2. **Speech Recognition**: to turn audio into text on this Mac.
-3. **Accessibility**: to press the voice shortcuts and buttons in Codex, Claude and Claude Code. Enable HeyVoice under System Settings → Privacy & Security → Accessibility.
+<details>
+<summary>Download it yourself instead</summary>
 
-`build.sh` signs the app ad-hoc with a requirement of just its bundle identifier, so the permissions carry over to rebuilt copies.
+Get `Hey-AI.zip` from [Releases](https://github.com/notorious-d-e-v/hey-ai/releases/latest), unzip it and drag **Hey AI** to Applications. Hey AI isn't notarized by Apple yet, so the first time you open it macOS says it can't check it. Open **System Settings → Privacy & Security** and click **Open Anyway**. The one-line installer skips this step, because files downloaded with `curl` aren't flagged.
 
-## How each app is opened
+</details>
 
-- **ChatGPT and Codex** both use the ChatGPT + Codex app (`ChatGPT.app`). ChatGPT Classic no longer has a voice button: its `chatgpt://new-voice-conversation` link opens the app without starting voice. HeyVoice brings the app forward and opens a new chat, then presses ⌃⇧V, the app's own "start voice chat" shortcut. "Hey Chatty" opens the chat with ⌘⌥O ("New standalone chat", no project folder); "Hey Codex" uses ⌘N ("New Chat" in the current folder).
-- **Claude**: HeyVoice opens `claude://claude.ai/new`, then presses the composer's **Use voice mode** button through Accessibility. Older claude.ai builds left that button unnamed; for those, HeyVoice falls back to the rightmost unnamed button in the composer's bottom row. It confirms voice mode started when the button stops offering "Use voice mode".
-- **Claude Code**: HeyVoice opens `claude://code/new` (a new session in the folder Claude used last), then presses ⌘D, Claude's "toggle dictation" shortcut. If ⌘D doesn't start recording, it clicks the mic button instead. While you dictate, wake phrases are ignored, so words in your prompt can't open anything.
+## What you can say
+
+| Say | What happens |
+| --- | --- |
+| **“Hey Claude”** | Claude opens a new chat in voice mode. |
+| **“Hey Claude Code”** | A new Claude Code session opens in the Claude app, already dictating. Finish with **“send it”**, or pause and say **“enter”**. |
+| **“Hey Chatty”** | ChatGPT opens a new voice chat. |
+| **“Hey Codex”** | Codex opens a new voice chat in your current project. |
+| **“Stop listening”** | Ends whatever voice chat is open, right away. |
+
+While Claude or ChatGPT is already listening, Hey AI ignores wake phrases, so talking to your assistant never opens a second one.
+
+### Sending a Claude Code prompt
+
+Claude Code has dictation rather than a voice conversation, so you speak your prompt and then send it:
+
+- End with **“send it”** (or “send that”). It sends after a second of quiet.
+- Or pause, then say **“enter”**, “send” or “done” on its own. A prompt that ends “…and press enter” won't send.
+- Pause for two seconds and a small bubble asks *Done?* A plain **“yes”** sends.
+- If Claude stops dictating on its own, or you click its mic button, Hey AI sends what's there.
+
+Hey AI removes the spoken command from the prompt before pressing Return. A pause on its own never sends.
+
+## Privacy
+
+- **Your voice stays on your Mac.** Hey AI uses Apple's on-device speech recognition and never records audio.
+- **It only acts on names.** Everything else it hears is discarded once it's checked.
+- **The log is short.** `~/Library/Logs/HeyAI/heyai.log` records which phrase was heard and what was opened, never what you said to your assistant.
+- **No network, no analytics.** Hey AI makes no network requests of its own. (The menu has an *Allow Online Speech Recognition* fallback, off by default, for Macs without on-device speech. It sends audio to Apple, so leave it off unless you need it.)
+
+## Permissions
+
+| Permission | Why Hey AI needs it |
+| --- | --- |
+| Microphone | To hear the wake phrase. |
+| Speech Recognition | To turn speech into text, on your Mac. |
+| Accessibility | Claude and ChatGPT have no “start voice” link, so Hey AI opens a new chat and presses the voice button for you, the way you would. |
+
+The setup window asks for all three in one pass. macOS doesn't let apps switch Accessibility on themselves, so you flip one switch in the list it opens.
 
 ## Menu
 
-- **Pause / Resume Listening**: turns the microphone off and on.
-- **Send Now / Don't Send**: shown while a Claude Code dictation is open.
-- **Test**: run any of the four actions without speaking, or write Claude's on-screen controls to the log. That dump is how to fix the Claude button lookup if Claude changes its page.
-- **Launch at Login**: on means HeyVoice starts in the background whenever you log in. `open heyvoice://login/on` (or `off`) does the same from the terminal.
-- **Allow Online Speech Recognition**: off by default. It only matters when on-device recognition is unavailable, and it sends microphone audio to Apple.
+Click the quote mark in the menu bar to pause listening, run any action without speaking (Test), open setup again, start at login, or turn on **Keep Screen Awake**.
 
-You can also run the actions from the terminal while HeyVoice is running:
+<details>
+<summary>How it works</summary>
+
+- **Listening.** `SFSpeechRecognizer` in on-device mode runs over the microphone. Recognition restarts every 50 seconds and after each wake phrase, so an old phrase can never fire twice. Common mishearings are accepted (“chati”, “cloud”, “clawed”, “codecs”). See [`Sources/WakeMatcher.swift`](Sources/WakeMatcher.swift).
+- **Claude.** Opens `claude://claude.ai/new`, then presses the composer's *Use voice mode* button through Accessibility.
+- **Claude Code.** Opens `claude://code/new`, then presses ⌘D, Claude's dictation shortcut.
+- **ChatGPT and Codex.** Brings the ChatGPT app forward, opens a new chat (⌘⌥O for a standalone chat, ⌘N for one in your project), then presses ⌃⇧V, the app's own voice shortcut.
+- **Already listening?** Core Audio reports which processes are using the microphone. If Claude or ChatGPT is, wake phrases are ignored.
+
+</details>
+
+<details>
+<summary>Troubleshooting</summary>
+
+- **Nothing happens when I talk.** The menu should say *Listening (on-device)*. If it says on-device speech isn't available, turn on Dictation in **System Settings → Keyboard** so macOS downloads it.
+- **The app opens but voice doesn't start.** Check that Hey AI is switched on under **System Settings → Privacy & Security → Accessibility**. If it is, Claude or ChatGPT may have changed its layout. Choose **Test → Write Claude Controls to Log** and open an issue with the log.
+- **It doesn't work while my Mac is locked.** macOS doesn't let any app drive other apps behind the lock screen. **Keep Screen Awake** stops the display from sleeping, so the Mac doesn't lock on its own.
+- **My AirPods sound worse.** While any app holds an AirPods microphone, macOS switches them to call-quality audio. Pick your Mac's built-in microphone as the input.
+
+</details>
+
+## Uninstall
 
 ```bash
-open heyvoice://open/chatgpt
+curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/uninstall.sh | bash
 ```
+
+It removes the app, its login item, settings, logs and permissions.
+
+## Build from source
+
+You only need Apple's Command Line Tools (`xcode-select --install`), not Xcode.
 
 ```bash
-open heyvoice://open/claude-code
+git clone https://github.com/notorious-d-e-v/hey-ai.git && cd hey-ai && ./build.sh && open "build/Hey AI.app"
 ```
 
-```bash
-open heyvoice://send/claude-code
-```
+`./build.sh` runs the phrase tests, then builds a universal app. `./scripts/release.sh` makes the release zip.
 
-`open/` also takes `codex` and `claude`.
+---
 
-```bash
-open heyvoice://dump/claude
-```
+Hey AI is free and open source under the [MIT license](LICENSE). Brand guidelines are in [`brand/BRAND.md`](brand/BRAND.md).
 
-Log: `~/Library/Logs/HeyVoice/heyvoice.log`
-
-## Known limits
-
-- **Locked screen.** HeyVoice keeps listening while the screen is locked or asleep, but macOS sends simulated key presses and clicks to the lock screen, not to apps. Steps that use them (ChatGPT's ⌘N/⌘⌥O and ⌃⇧V, Claude Code's ⌘D) can't work until you unlock. The log marks events that happened while the screen was locked. After a restart, nothing runs until you log in.
-- The microphone is open the whole time, so the orange mic dot stays on.
-- If AirPods are your input device, macOS switches them to call-quality audio while any app holds the mic. Use the Mac's built-in mic as the input to avoid this.
-- Each app step depends on that app's current links, shortcuts and page layout. If either app changes, the Test menu and the log show which step failed.
-- Mishearings are handled with a list of near-misses ("chati", "cloud", "clawed", …) in `Sources/WakeMatcher.swift`. Add to it if your voice gets misheard. `./build.sh` runs the matcher tests.
+Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project, not affiliated with or endorsed by either company.

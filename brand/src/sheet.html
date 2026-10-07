@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=block" rel="stylesheet">
+<style>
+  :root { --ink:#1B1A2E; --paper:#FFFFFF; --mist:#F0F1F6; --hl:#FFD84D; --signal:#4B4BE6; --graphite:#5C5B70; }
+  html,body { margin:0; }
+  body { width:1280px; background:#fff; color:var(--ink); font:400 15px/1.45 "Hanken Grotesk"; padding:64px 72px; box-sizing:border-box; }
+  h1 { font:800 30px Unbounded; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub { color:var(--graphite); margin:0 0 40px; font-size:17px; }
+  h2 { font:600 13px "Hanken Grotesk"; color:var(--graphite); margin:0 0 14px; }
+  .row { display:grid; gap:20px; margin-bottom:44px; }
+  .logos { grid-template-columns: 1.2fr 1.2fr 0.6fr; }
+  .tile { border-radius:16px; height:180px; display:grid; place-items:center; }
+  .tile.paper { background:var(--paper); border:1px solid #E4E5EE; }
+  .tile.ink { background:var(--ink); }
+  .lockup { display:flex; align-items:center; gap:16px; }
+  .lockup img { height:44px; }
+  .tile.icon img { height:150px; }
+  .colors { grid-template-columns: repeat(6, 1fr); }
+  .sw { border-radius:14px; height:118px; padding:14px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-end; font-weight:600; }
+  .sw span { font-weight:400; font-size:13px; opacity:.85; }
+  .type { grid-template-columns: 1fr 1fr; }
+  .spec { border:1px solid #E4E5EE; border-radius:16px; padding:26px 28px; }
+  .spec .big { font:800 54px/1.05 Unbounded; letter-spacing:-0.02em; margin:6px 0 10px; }
+  .spec .text { font:500 26px/1.3 "Hanken Grotesk"; margin:6px 0 10px; }
+  .spec small { color:var(--graphite); font-size:13px; }
+  .rule { grid-template-columns: 1fr 1fr; }
+  .said-l { font:800 40px Unbounded; letter-spacing:-0.02em; background:linear-gradient(var(--hl),var(--hl)) no-repeat 0 88%/100% .5em; padding:0 .06em; }
+  .said-d { font:800 40px Unbounded; letter-spacing:-0.02em; color:var(--hl); }
+  .rule .tile { height:150px; }
+  .menubar { grid-template-columns: repeat(4, 1fr); }
+  .mb { border-radius:12px; background:#ECECEF; height:84px; display:flex; align-items:center; gap:14px; padding:0 18px; }
+  .mb img { height:16px; }
+  .mb b { font-weight:600; }
+  .mb span { color:var(--graphite); font-size:13px; display:block; }
+</style></head>
+<body>
+  <h1>Hey AI brand</h1>
+  <p class="sub">The mark is an opening quote: someone is about to speak. Yellow means words you say out loud.</p>
+
+  <h2>Logo</h2>
+  <div class="row logos">
+    <div class="tile paper"><div class="lockup"><img src="../logo/mark-ink.svg"><img src="../logo/wordmark-ink.svg"></div></div>
+    <div class="tile ink"><div class="lockup"><img src="../logo/mark-highlight.svg"><img src="../logo/wordmark-white.svg"></div></div>
+    <div class="tile paper icon"><img src="../logo/app-icon-1024.png"></div>
+  </div>
+
+  <h2>Color</h2>
+  <div class="row colors">
+    <div class="sw" style="background:var(--ink);color:#fff">Ink<span>#1B1A2E</span></div>
+    <div class="sw" style="background:#fff;border:1px solid #E4E5EE">Paper<span>#FFFFFF</span></div>
+    <div class="sw" style="background:var(--mist)">Mist<span>#F0F1F6</span></div>
+    <div class="sw" style="background:var(--hl)">Highlight<span>#FFD84D</span></div>
+    <div class="sw" style="background:var(--signal);color:#fff">Signal<span>#4B4BE6</span></div>
+    <div class="sw" style="background:var(--graphite);color:#fff">Graphite<span>#5C5B70</span></div>
+  </div>
+
+  <h2>Type</h2>
+  <div class="row type">
+    <div class="spec"><small>Unbounded, 700–800. Wordmark, headlines, spoken phrases.</small><div class="big">“Hey Claude”</div><small>Tight tracking (−2%), never below 20 px.</small></div>
+    <div class="spec"><small>Hanken Grotesk, 400–700. Everything you read.</small><div class="text">Claude opens, ready to talk. Say “stop listening” when you're done.</div><small>Inside the app: SF Pro, so it feels native.</small></div>
+  </div>
+
+  <h2>The highlight rule: only words you say out loud</h2>
+  <div class="row rule">
+    <div class="tile paper"><span class="said-l">“Hey Chatty”</span></div>
+    <div class="tile ink"><span class="said-d">“Hey Chatty”</span></div>
+  </div>
+
+  <h2>Menu bar</h2>
+  <div class="row menubar">
+    <div class="mb"><img src="../logo/menubar-listening.png"><div><b>Listening</b><span>Waiting for a name</span></div></div>
+    <div class="mb"><img src="../logo/menubar-heard.png"><div><b>Heard you</b><span>Opening the assistant</span></div></div>
+    <div class="mb"><img src="../logo/menubar-dictating.png"><div><b>Dictating</b><span>Claude Code, until “send it”</span></div></div>
+    <div class="mb"><img src="../logo/menubar-paused.png"><div><b>Paused</b><span>Microphone off</span></div></div>
+  </div>
+</body></html>

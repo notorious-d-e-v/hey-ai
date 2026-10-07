@@ -295,11 +295,6 @@ final class WakeListener {
         pendingTimer?.invalidate()
         pendingTimer = Timer.scheduledTimer(withTimeInterval: Self.continuationWait, repeats: false) { [weak self] _ in
             guard let self, let pending = self.pendingMatch else { return }
-            // What followed "hey claude" (for spotting new mishearings of "code").
-            let words = WakeMatcher.normalize(self.lastHeardText)
-            if let i = words.lastIndex(where: WakeMatcher.isClaude) {
-                Log.info("after “\(words[i])” heard: “\(words[(i + 1)...].prefix(4).joined(separator: " "))”")
-            }
             self.fire(pending.match, text: pending.text)
         }
     }

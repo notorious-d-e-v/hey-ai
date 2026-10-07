@@ -4,34 +4,22 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Hey AI</string>
 	<key>CFBundleExecutable</key>
 	<string>HeyAI</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.notorious.heyai</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Hey AI</string>
-	<key>CFBundleDisplayName</key>
-	<string>Hey AI</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>LSUIElement</key>
-	<true/>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Hey AI listens for “Hey Claude”, “Hey Chatty” and the other wake phrases. Speech is recognized on this Mac and never recorded.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Hey AI uses on-device speech recognition to hear its wake phrases.</string>
+	<string>1.0.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -43,5 +31,17 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hey AI listens for “Hey Claude”, “Hey Chatty” and the other wake phrases. Speech is recognized on this Mac and never recorded.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Hey AI uses on-device speech recognition to hear its wake phrases.</string>
 </dict>
 </plist>

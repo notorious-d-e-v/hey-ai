@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;800&family=Hanken+Grotesk:wght@400;500;600&display=block" rel="stylesheet">
+<style>
+  :root { --ink:#1B1A2E; --paper:#FFFFFF; --mist:#F0F1F6; --hl:#FFD84D; --graphite:#5C5B70; }
+  body.dark { --paper:#1B1A2E; --ink:#FFFFFF; --graphite:#B9B8CC; --mist:#26254A; }
+  html,body { margin:0; }
+  body { width:1280px; height:420px; background:var(--paper); color:var(--ink); font-family:"Hanken Grotesk"; overflow:hidden; position:relative; }
+  .brand { position:absolute; left:72px; top:56px; display:flex; align-items:center; gap:12px; }
+  .brand img { height:26px; }
+  .phrase { position:absolute; left:64px; top:118px; font:800 112px/1 Unbounded; letter-spacing:-2px; white-space:nowrap; }
+  .phrase span { position:relative; z-index:1; }
+  /* A highlighter stroke behind the spoken words: slightly uneven, like a marker. */
+  .phrase::before { content:""; position:absolute; left:-10px; right:-14px; bottom:4px; height:54%; background:var(--hl);
+    border-radius:6px 14px 8px 12px; transform:rotate(-0.6deg); z-index:0; }
+  /* On ink, spoken words are set in the highlight colour instead of on a stroke. */
+  body.dark .phrase span { color:var(--hl); }
+  body.dark .phrase::before { display:none; }
+  .line { position:absolute; left:72px; top:268px; font:500 30px/1.25 "Hanken Grotesk"; color:var(--ink); }
+  .others { position:absolute; left:72px; top:330px; display:flex; gap:12px; font:500 19px "Hanken Grotesk"; color:var(--graphite); align-items:center; }
+  .others b { font-weight:600; color:var(--ink); background:var(--mist); padding:5px 11px; border-radius:7px; }
+</style></head>
+<body class="__THEME__">
+  <div class="brand"><img src="../logo/__MARK__.svg" alt=""><img src="../logo/__WORD__.svg" alt=""></div>
+  <div class="phrase"><span>“Hey Claude”</span></div>
+  <div class="line">Claude opens, ready to talk.</div>
+  <div class="others">Also <b>“Hey Chatty”</b><b>“Hey Codex”</b><b>“Hey Claude Code”</b></div>
+</body></html>

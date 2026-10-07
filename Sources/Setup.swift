@@ -59,8 +59,14 @@ final class SetupModel: ObservableObject {
         if onDevice != onDeviceSpeech { onDeviceSpeech = onDevice }
     }
 
+    private let shownAt = Date()
+    private func logStep(_ step: String) {
+        Log.info(String(format: "setup: %@ (%.1f s after the window opened)", step, Date().timeIntervalSince(shownAt)))
+    }
+
     /// The one button: microphone, then speech recognition, then Accessibility.
     func allowAccess() {
+        logStep("Allow access clicked")
         asking = true
         requestMicrophone { [weak self] in
             self?.requestSpeech {
@@ -76,6 +82,7 @@ final class SetupModel: ObservableObject {
         AVCaptureDevice.requestAccess(for: .audio) { granted in
             DispatchQueue.main.async {
                 self.microphone = granted ? .granted : .denied
+                self.logStep("microphone \(granted ? "allowed" : "denied")")
                 next()
             }
         }
@@ -86,6 +93,7 @@ final class SetupModel: ObservableObject {
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 self.speech = status == .authorized ? .granted : .denied
+                self.logStep("speech recognition \(status == .authorized ? "allowed" : "denied")")
                 self.onDeviceSpeech = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))?.supportsOnDeviceRecognition ?? false
                 next()
             }
@@ -108,6 +116,7 @@ final class SetupModel: ObservableObject {
             timer.invalidate()
             self?.accessibility = .granted
             self?.asking = false
+            self?.logStep("Accessibility allowed")
             NSApp.activate(ignoringOtherApps: true)
         }
     }

@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@800&family=Hanken+Grotesk:wght@500;600&display=block" rel="stylesheet">
+<style>
+  :root { --ink:#1B1A2E; --hl:#FFD84D; --graphite:#5C5B70; --mist:#F0F1F6; }
+  html,body { margin:0; }
+  body { width:1280px; height:640px; background:#fff; color:var(--ink); font-family:"Hanken Grotesk"; overflow:hidden; position:relative; }
+  .brand { position:absolute; left:84px; top:76px; display:flex; align-items:center; gap:14px; }
+  .brand img { height:34px; }
+  .phrase { position:absolute; left:74px; top:200px; font:800 128px/1 Unbounded; letter-spacing:-2.5px; white-space:nowrap; }
+  .phrase span { position:relative; z-index:1; }
+  .phrase::before { content:""; position:absolute; left:-12px; right:-16px; bottom:6px; height:54%; background:var(--hl);
+    border-radius:7px 16px 9px 14px; transform:rotate(-0.6deg); z-index:0; }
+  .line { position:absolute; left:84px; top:380px; font:500 38px/1.25 "Hanken Grotesk"; }
+  .foot { position:absolute; left:84px; bottom:72px; font:500 24px "Hanken Grotesk"; color:var(--graphite); }
+  .foot b { color:var(--ink); font-weight:600; }
+</style></head>
+<body>
+  <div class="brand"><img src="../logo/mark-ink.svg" alt=""><img src="../logo/wordmark-ink.svg" alt=""></div>
+  <div class="phrase"><span>“Hey Claude”</span></div>
+  <div class="line">Claude opens, ready to talk.</div>
+  <div class="foot">A free Mac app for <b>Claude</b>, <b>ChatGPT</b> and <b>Codex</b>.</div>
+</body></html>

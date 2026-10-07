@@ -44,3 +44,21 @@ heard.lastHeard = "Heard “Hey Claude”. Opening Claude…"
 render(SetupView(model: heard), "setup-4-heard")
 
 render(NudgePreview(), "nudge")
+
+// Menu-bar icon states, drawn by the app's own code, at 4x on transparent.
+let logoDir = CommandLine.arguments.dropFirst(2).first
+if let logoDir {
+    let states: [(String, Brand.MenuState)] = [("listening", .listening), ("paused", .paused), ("heard", .heard), ("dictating", .dictating)]
+    for (name, state) in states {
+        let image = Brand.menuBarImage(state)
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 96, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                   hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        rep.size = NSSize(width: 24, height: 16)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: 24, height: 16))
+        NSGraphicsContext.restoreGraphicsState()
+        try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "\(logoDir)/menubar-\(name).png"))
+        print("menubar-\(name)")
+    }
+}

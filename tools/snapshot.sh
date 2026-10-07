@@ -6,4 +6,4 @@ SOURCES=$(ls Sources/*.swift | grep -v main.swift)
 swiftc -O -swift-version 5 -D SNAPSHOT $SOURCES tools/snapshot/main.swift \
   -framework AppKit -framework SwiftUI -framework AVFoundation -framework Speech -framework CoreAudio \
   -framework ApplicationServices -framework ServiceManagement -framework IOKit -o build/snapshot
-./build/snapshot "${1:-/tmp/heyai-snapshots}"
+./build/snapshot "${1:-/tmp/heyai-snapshots}" "${2:-}"

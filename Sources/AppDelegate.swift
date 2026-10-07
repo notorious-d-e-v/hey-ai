@@ -20,7 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var setupChanges: AnyCancellable?
 
     private var listenerState: WakeListener.State = .stopped
-    private var lastHeard = ""
     private var lastAction = ""
     private var flashUntil = Date.distantPast
 
@@ -69,7 +68,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.listenerState = state
             self?.updateIcon()
         }
-        listener.onHeard = { [weak self] text in self?.lastHeard = text }
         listener.onWake = { [weak self] match, heard in
             // Saying a wake phrase while talking to an assistant shouldn't open a new one.
             if let busy = MicActivity.assistantListening() {
@@ -370,9 +368,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(info("“Hey Codex” → Codex voice"))
         menu.addItem(info("“Hey Claude” → Claude voice"))
         menu.addItem(info("“Hey Claude Code” → Claude Code dictation"))
-        if !lastHeard.isEmpty, case .listening = listenerState {
-            menu.addItem(info("Heard: …\(String(lastHeard.suffix(48)))"))
-        }
         if !lastAction.isEmpty { menu.addItem(info("Last: \(lastAction)")) }
 
         menu.addItem(.separator())
