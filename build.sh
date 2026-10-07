@@ -14,7 +14,7 @@ swiftc -O -swift-version 5 \
   Sources/WakeMatcher.swift Sources/Launcher.swift Sources/NudgePanel.swift Sources/MicActivity.swift \
   Sources/Log.swift \
   -framework AppKit -framework AVFoundation -framework Speech -framework CoreAudio \
-  -framework ApplicationServices -framework ServiceManagement \
+  -framework ApplicationServices -framework ServiceManagement -framework IOKit \
   -o build/HeyVoice-bin
 
 APP=build/HeyVoice.app

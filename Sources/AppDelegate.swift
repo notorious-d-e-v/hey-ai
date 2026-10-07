@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import IOKit.pwr_mgt
 import AVFoundation
 import ServiceManagement
 import Speech
@@ -19,6 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var flashUntil = Date.distantPast
 
     private let defaults = UserDefaults.standard
+
+    /// Held while "Keep Screen Awake" is on.
+    private var displayAssertion: IOPMAssertionID = 0
+
+    private var keepScreenAwake: Bool {
+        get { defaults.bool(forKey: "keepScreenAwake") }
+        set { defaults.set(newValue, forKey: "keepScreenAwake") }
+    }
 
     private var paused: Bool {
         get { defaults.bool(forKey: "paused") }
@@ -58,7 +67,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.lastAction = "Ignored “\(match.target.wakePhrase)”: \(busy.rawValue) is already listening"
                 return
             }
-            Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)\(Session.isScreenLocked ? " (screen locked)" : "")")
+            // Apps can't be driven behind the lock screen (macOS hides their content and
+            // sends input to the lock screen), so don't try.
+            if Session.isScreenLocked {
+                Log.info("heard \"\(match.phrase)\" while the screen is locked; ignored")
+                self?.lastAction = "Ignored “\(match.target.wakePhrase)”: the screen was locked"
+                return
+            }
+            Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)")
             self?.trigger(match.target)
         }
         listener.onSendPhrase = { [weak self] command in
@@ -85,6 +101,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.nudge.hide()
             self.updateIcon()
         }
+
+        if keepScreenAwake { setKeepScreenAwake(true) }
 
         Log.info("HeyVoice started")
         updateIcon()
@@ -140,6 +158,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.updateIcon()
                 }
             }
+        }
+    }
+
+    @objc private func toggleKeepScreenAwake() {
+        keepScreenAwake.toggle()
+        setKeepScreenAwake(keepScreenAwake)
+    }
+
+    /// Stops the display from sleeping on idle (like `caffeinate -d`), so the Mac doesn't
+    /// auto-lock and wake phrases keep working.
+    private func setKeepScreenAwake(_ on: Bool) {
+        if on, displayAssertion == 0 {
+            let result = IOPMAssertionCreateWithName(
+                kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                "Keep listening for wake phrases" as CFString, &displayAssertion)
+            Log.info("keep screen awake on (\(result == kIOReturnSuccess ? "ok" : "error \(result)"))")
+        } else if !on, displayAssertion != 0 {
+            IOPMAssertionRelease(displayAssertion)
+            displayAssertion = 0
+            Log.info("keep screen awake off")
         }
     }
 
@@ -319,6 +358,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let login = item("Launch at Login", #selector(toggleLaunchAtLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
+        let awake = item("Keep Screen Awake", #selector(toggleKeepScreenAwake))
+        awake.state = keepScreenAwake ? .on : .off
+        awake.toolTip = "The display won't sleep on its own, so the Mac doesn't auto-lock and wake phrases keep working. An unattended Mac stays unlocked."
+        menu.addItem(awake)
         let server = item("Allow Online Speech Recognition", #selector(toggleServerRecognition))
         server.state = allowServerRecognition ? .on : .off
         server.toolTip = "Only used if on-device recognition is unavailable. Sends microphone audio to Apple."
