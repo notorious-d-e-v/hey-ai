@@ -12,4 +12,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./build.sh
-      - run: bash -n install.sh uninstall.sh scripts/release.sh
+      - name: Check the shell scripts parse
+        run: for f in install.sh uninstall.sh scripts/release.sh build.sh tools/snapshot.sh; do bash -n "$f"; done

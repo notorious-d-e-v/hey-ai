@@ -57,7 +57,15 @@ main() {
     [ -w "$dest" ] || { dest="$HOME/Applications"; mkdir -p "$dest"; }
   fi
 
-  pkill -x HeyAI 2>/dev/null && sleep 0.5 || true
+  # Check we can replace it before stopping the running copy.
+  if [ ! -w "$dest" ] || { $updating && [ ! -w "$dest/$app_name" ]; }; then
+    fail "can't write to $dest/$app_name. Delete it from $dest (or ask an admin to), then run this again."
+  fi
+
+  if pkill -x HeyAI 2>/dev/null; then
+    local i
+    for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -x HeyAI >/dev/null || break; sleep 0.5; done
+  fi
   rm -rf "${dest:?}/$app_name" 2>/dev/null \
     || fail "couldn't replace $dest/$app_name. Quit Hey AI, delete it from $dest, then run this again."
   mv "$tmp/unzipped/$app_name" "$dest/" || fail "couldn't move Hey AI into $dest."

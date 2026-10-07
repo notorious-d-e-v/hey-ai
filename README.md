@@ -109,7 +109,7 @@ Click the quote mark in the menu bar to pause listening, run any action without 
 curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/uninstall.sh | bash
 ```
 
-It removes the app, its login item, settings, logs and permissions.
+It removes the app, its settings, logs and permissions, and its login item (if Hey AI is running when you uninstall; otherwise it tells you where to remove it).
 
 ## Build from source
 

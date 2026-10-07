@@ -10,16 +10,20 @@ main() {
   local bundle_id="dev.notorious.heyai"
   local left=()
 
+  local found=false dir app
+  for dir in /Applications "$HOME/Applications"; do
+    [ -d "$dir/Hey AI.app" ] && found=true
+  done
+
   # Hey AI can only remove its own login item while it's running.
   if pgrep -x HeyAI >/dev/null; then
     open -g "heyai://login/off" && sleep 1.5
     pkill -x HeyAI 2>/dev/null
     sleep 0.5
-  else
+  elif $found; then
     left+=("If Hey AI still appears in System Settings → General → Login Items, remove it there.")
   fi
 
-  local dir app
   for dir in /Applications "$HOME/Applications"; do
     app="$dir/Hey AI.app"
     [ -d "$app" ] || continue

@@ -38,11 +38,11 @@ partial.microphone = .granted; partial.speech = .denied; partial.accessibility =
 render(SetupView(model: partial), "setup-2-partial")
 
 let ready = SetupModel()
-ready.microphone = .granted; ready.speech = .granted; ready.accessibility = .granted
+ready.microphone = .granted; ready.speech = .granted; ready.accessibility = .granted; ready.isListening = true
 render(SetupView(model: ready), "setup-3-ready")
 
 let heard = SetupModel()
-heard.microphone = .granted; heard.speech = .granted; heard.accessibility = .granted
+heard.microphone = .granted; heard.speech = .granted; heard.accessibility = .granted; heard.isListening = true
 heard.lastHeard = "Heard “Hey Claude”. Opening Claude…"
 render(SetupView(model: heard), "setup-4-heard")
 

@@ -50,7 +50,7 @@ Highlight marks exactly one thing: words you say to Hey AI.
 - **Large phrases on light backgrounds** (banners, cards): draw a marker stroke behind the phrase, covering the lower half of the letters, set slightly off level (−0.6°) with uneven corners, like a real highlighter. Text stays Ink. On the web, where a phrase can wrap, the stroke is drawn level, once per line.
 - **Large phrases on Ink**: set the phrase itself in Highlight, with no stroke.
 - **Small phrases** (pills in the app, tables, chips): a Highlight background with Ink text, on any background. At small sizes the pill reads better than colored text.
-- Never highlight anything else for emphasis: not product names, not prices, not “free”. If everything is yellow, nothing is something to say.
+- Never highlight anything else for emphasis: not product names, not prices, not “free”. Buttons and other controls never use Highlight either. If everything is yellow, nothing is something to say.
 
 ## Type
 
@@ -85,11 +85,12 @@ One moment: when a phrase appears, the highlighter sweeps in from left to right 
 
 - The menu-bar icon is the mark, drawn as a template image so macOS tints it. States: listening (mark), heard you (mark knocked out of a filled pill), dictating to Claude Code (smaller mark plus a dot), paused (dimmed mark with a slash).
 - The setup window is Paper with Ink type. Steps are numbered because they happen in order, and each turns into an Ink circle with a Highlight check when it's done. Wake phrases appear as Highlight pills.
-- The “Done?” nudge uses the same rule: Ink text on white, with “send it” and “enter” highlighted.
+- The “Done?” nudge uses the same rule: Ink text on white, with “yes” highlighted.
+- Status dots: a filled Signal dot means listening; a hollow Graphite ring means it isn't.
 
 ## Other companies' names
 
-Refer to Claude, Claude Code, ChatGPT and Codex by name in plain text. Buttons and other controls never use Highlight: it's only for words you say. Never use their logos, colors or typefaces, and never imply endorsement. Wherever the brand appears at length (site, README, store pages), include: *Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project.*
+Refer to Claude, Claude Code, ChatGPT and Codex by name in plain text. Never use their logos, colors or typefaces, and never imply endorsement. Wherever the brand appears at length (site, README, store pages), include: *Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project.*
 
 ## Regenerating assets
 

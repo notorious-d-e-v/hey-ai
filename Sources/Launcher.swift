@@ -136,7 +136,7 @@ final class Launcher {
     /// Opens a new chat in the ChatGPT + Codex app with `newChat`, then starts voice (⌃⇧V).
     private func openVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)) -> String {
         let bundleID = Self.codexBundleID
-        guard Self.isInstalled(bundleID) else { return "The ChatGPT + Codex app isn't installed" }
+        guard Self.isInstalled(bundleID) else { return "ChatGPT isn't installed (Hey AI needs the current ChatGPT app)" }
         guard AXIsProcessTrusted() else {
             Self.activate(bundleID)
             return "\(name): opened, but Hey AI needs Accessibility permission to start voice"
@@ -825,12 +825,16 @@ final class AXReader {
             let composer = controls
                 .filter { ($0.role == "AXTextArea" || $0.role == "AXTextField") && $0.frame.width > 250 }
                 .max { $0.frame.width < $1.frame.width }
+            guard let ta = composer?.frame else {
+                // Without a prompt box, names could be chat titles: count roles only.
+                let roles = Dictionary(grouping: controls, by: \.role).map { "\($0.key)×\($0.value.count)" }.sorted()
+                lines.append("  no prompt box; controls: \(roles.joined(separator: ", "))")
+                continue
+            }
             for c in controls {
                 let f = c.frame
-                if let ta = composer?.frame {
-                    guard f.midY > ta.minY - 40, f.midY < ta.maxY + 90,
-                          f.midX > ta.minX - 60, f.midX < ta.maxX + 100 else { continue }
-                }
+                guard f.midY > ta.minY - 40, f.midY < ta.maxY + 90,
+                      f.midX > ta.minX - 60, f.midX < ta.maxX + 100 else { continue }
                 let extra = [("id", "AXIdentifier"), ("help", kAXHelpAttribute), ("desc", kAXDescriptionAttribute)]
                     .compactMap { name, attribute -> String? in
                         let value = string(c.element, attribute)
@@ -855,9 +859,9 @@ final class AXReader {
     private func outline(_ element: AXUIElement, depth: Int, into lines: inout [String]) {
         guard depth <= 8, lines.count < 150 else { return }
         let kids = children(element)
-        let title = [kAXTitleAttribute, kAXDescriptionAttribute].map { string(element, $0) }.first { !$0.isEmpty } ?? ""
+        // Roles only: titles here can be window or chat names.
         lines.append(String(repeating: "  ", count: depth + 1)
-                     + "\(string(element, kAXRoleAttribute)) \"\(title.prefix(40))\" children=\(kids.count)")
+                     + "\(string(element, kAXRoleAttribute)) children=\(kids.count)")
         for kid in kids { outline(kid, depth: depth + 1, into: &lines) }
     }
 

@@ -24,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var flashUntil = Date.distantPast
 
     private let defaults = UserDefaults.standard
+    private static let showSetupNotification = Notification.Name("dev.notorious.heyai.showSetup")
+    private var lastStartAttempt = Date.distantPast
 
     /// Held while "Keep Screen Awake" is on.
     private var displayAssertion: IOPMAssertionID = 0
@@ -51,13 +53,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Lifecycle
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // One copy at a time: a second one (say, from ~/Applications) would also listen.
+        // One copy at a time: a second one (say, a fresh build) would also listen. Ask the
+        // running copy to show its window, then quit this one.
         let mine = ProcessInfo.processInfo.processIdentifier
         if let other = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
-            .first(where: { $0.processIdentifier != mine }) {
-            Log.info("another Hey AI is already running (pid \(other.processIdentifier)); quitting this one")
+            .first(where: { $0.processIdentifier != mine && !$0.isTerminated }) {
+            Log.info("another Hey AI is already running (pid \(other.processIdentifier)); showing it and quitting this one")
+            DistributedNotificationCenter.default().postNotificationName(Self.showSetupNotification, object: nil,
+                                                                         userInfo: nil, deliverImmediately: true)
             exit(0)
         }
+        DistributedNotificationCenter.default().addObserver(
+            forName: Self.showSetupNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.showSetup() }
+        NSApp.mainMenu = Self.makeMainMenu()
         // heyai://open/<chatgpt|codex|claude|claude-code>, heyai://send/claude-code,
         // heyai://dump/<claude|chatgpt|codex>, heyai://login/<on|off>
         NSAppleEventManager.shared().setEventHandler(
@@ -75,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             self.listenerState = state
             if case .failed(let reason) = state { self.setup.listenerProblem = reason } else { self.setup.listenerProblem = nil }
+            if case .listening = state { self.setup.isListening = true } else { self.setup.isListening = false }
             self.updateIcon()
         }
         listener.onWake = { [weak self] match, heard in
@@ -125,10 +135,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Log.info("Hey AI started")
         updateIcon()
 
-        setup.onCanListen = { [weak self] in
-            guard let self, !self.paused else { return }
-            self.listener.start()
-        }
+        setup.isPaused = paused
+        setup.onCanListen = { [weak self] in self?.startListeningIfPossible() }
         setup.onFinish = { [weak self] in self?.finishSetup() }
         // Closing the window once everything is allowed counts as done; closing it
         // earlier leaves setup to finish next time.
@@ -147,6 +155,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // window asks for them, so the system prompts appear with an explanation.
         if setup.canListen && !paused { listener.start() }
         if !setupDone || !setup.allGranted { showSetup() }
+    }
+
+    /// Starts listening when it should be and isn't; safe to call often. After a failure
+    /// (say, on-device speech not downloaded yet) it retries at most every 3 seconds.
+    private func startListeningIfPossible() {
+        guard !paused, setup.canListen, !listener.isRunning else { return }
+        if listenerFailed && Date().timeIntervalSince(lastStartAttempt) < 3 { return }
+        lastStartAttempt = Date()
+        listener.start()
+    }
+
+    /// Opening Hey AI again (Finder, Spotlight, the Dock) shows its window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSetup()
+        return false
+    }
+
+    /// Only visible while the setup window gives Hey AI a Dock icon.
+    private static func makeMainMenu() -> NSMenu {
+        let main = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu(title: "Hey AI")
+        appMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Hey AI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+        return main
     }
 
     // MARK: Setup
@@ -324,6 +360,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func togglePause() {
         paused.toggle()
+        setup.isPaused = paused
         if paused {
             listener.stop()
         } else {
@@ -371,6 +408,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setLaunchAtLogin(_ on: Bool) {
         let service = SMAppService.mainApp
+        guard on != (service.status == .enabled) else { return }
         do {
             if on { try service.register() } else { try service.unregister() }
             Log.info("launch at login \(on ? "on" : "off") (status \(service.status.rawValue))")

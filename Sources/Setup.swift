@@ -20,11 +20,15 @@ final class SetupModel: ObservableObject {
     @Published var lastHeard: String?
     /// Why Hey AI isn't listening, if it isn't.
     @Published var listenerProblem: String?
+    /// Whether the microphone is actually being listened to right now.
+    @Published var isListening = false
+    @Published var isPaused = false
 
     var allGranted: Bool { microphone == .granted && speech == .granted && accessibility == .granted }
     var canListen: Bool { microphone == .granted && speech == .granted }
 
-    /// Called once microphone and speech are allowed, so listening can start right away.
+    /// Called whenever microphone and speech are allowed (on every refresh while the window
+    /// is open), so listening starts, or restarts after Dictation is turned on.
     var onCanListen: (() -> Void)?
     var onFinish: (() -> Void)?
     /// The window was closed with its close button.
@@ -59,10 +63,10 @@ final class SetupModel: ObservableObject {
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self else { return }
-            let couldListen = self.canListen
             self.refresh()
-            if !couldListen && self.canListen { self.onCanListen?() }
+            if self.canListen { self.onCanListen?() }
         }
+        if canListen { onCanListen?() }
     }
 
     func stopWatching() {
@@ -296,7 +300,7 @@ private struct ReadyView: View {
     var body: some View {
         let hasAssistant = Assistants.claude || Assistants.chatGPT
         VStack(alignment: .leading, spacing: 0) {
-            Text(model.listenerProblem != nil ? "One more step."
+            Text(model.listenerProblem != nil || model.isPaused ? "One more step."
                  : hasAssistant ? "You're set. Try one now." : "Almost there. Install an assistant.")
                 .font(.system(size: 20, weight: .bold))
                 .padding(.bottom, 8)
@@ -357,15 +361,23 @@ private struct ReadyView: View {
 private struct StatusLine: View {
     @ObservedObject var model: SetupModel
 
+    private var text: String {
+        if let problem = model.listenerProblem { return "Not listening. \(problem)" }
+        if model.isPaused { return "Paused. Resume from the menu bar." }
+        if !model.isListening { return "Starting…" }
+        return model.lastHeard ?? "Listening"
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Circle()
-                .fill(model.listenerProblem == nil ? Brand.signal : Color.orange)
+                .fill(model.isListening ? Brand.signal : Color.clear)
+                .overlay(Circle().stroke(model.isListening ? Color.clear : Brand.graphite, lineWidth: 1.5))
                 .frame(width: 7, height: 7)
                 .padding(.top, 5)
-            Text(model.listenerProblem.map { "Not listening. \($0)" } ?? model.lastHeard ?? "Listening")
+            Text(text)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(model.lastHeard != nil && model.listenerProblem == nil ? Brand.signal : Brand.graphite)
+                .foregroundColor(model.lastHeard != nil && model.isListening ? Brand.signal : Brand.graphite)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
