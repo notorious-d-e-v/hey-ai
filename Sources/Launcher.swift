@@ -21,15 +21,15 @@ final class Launcher {
 
     struct Result {
         let message: String
-        /// Claude Code dictation is running; HeyVoice should listen for a send command.
+        /// Claude Code dictation is running; Hey AI should listen for a send command.
         var awaitingSend = false
         /// Screen frame (top-left origin) of the Claude Code prompt box, for the nudge.
         var anchor: CGRect?
     }
 
-    private let queue = DispatchQueue(label: "heyvoice.launcher")
-    private let monitorQueue = DispatchQueue(label: "heyvoice.dictation-monitor")
-    /// The Claude Code session whose dictation HeyVoice started (launcher queue only).
+    private let queue = DispatchQueue(label: "heyai.launcher")
+    private let monitorQueue = DispatchQueue(label: "heyai.dictation-monitor")
+    /// The Claude Code session whose dictation Hey AI started (launcher queue only).
     private var codeSession: (reader: AXReader, composer: CodeComposer)?
     private var dictationTimer: DispatchSourceTimer?
 
@@ -96,7 +96,7 @@ final class Launcher {
         queue.async { completion(self.endVoiceNow(assistant)) }
     }
 
-    /// Stops the Claude Code dictation HeyVoice started, without sending.
+    /// Stops the Claude Code dictation Hey AI started, without sending.
     func stopClaudeCodeDictation(completion: @escaping (String) -> Void) {
         queue.async {
             self.codeSession = nil
@@ -139,7 +139,7 @@ final class Launcher {
         guard Self.isInstalled(bundleID) else { return "The ChatGPT + Codex app isn't installed" }
         guard AXIsProcessTrusted() else {
             Self.activate(bundleID)
-            return "\(name): opened, but HeyVoice needs Accessibility permission to start voice"
+            return "\(name): opened, but Hey AI needs Accessibility permission to start voice"
         }
         let wasRunning = Self.running(bundleID) != nil
         guard Self.activate(bundleID),
@@ -163,7 +163,7 @@ final class Launcher {
         guard Self.isInstalled(Self.claudeBundleID) else { return "Claude isn't installed" }
         guard Self.openURL(URL(string: "claude://claude.ai/new")!) else { return "Claude didn't open a new chat" }
         guard AXIsProcessTrusted() else {
-            return "Claude: opened a new chat, but HeyVoice needs Accessibility permission to start voice"
+            return "Claude: opened a new chat, but Hey AI needs Accessibility permission to start voice"
         }
         guard let reader = Self.claudeReader() else { return "Claude didn't start" }
 
@@ -205,7 +205,7 @@ final class Launcher {
             return Result(message: "Claude didn't open a new Code session")
         }
         guard AXIsProcessTrusted() else {
-            return Result(message: "Claude Code: opened a new session, but HeyVoice needs Accessibility permission to dictate")
+            return Result(message: "Claude Code: opened a new session, but Hey AI needs Accessibility permission to dictate")
         }
         guard let reader = Self.claudeReader() else { return Result(message: "Claude didn't start") }
 
@@ -306,7 +306,7 @@ final class Launcher {
 
     private func endVoiceNow(_ assistant: MicActivity.Assistant) -> String {
         let name = assistant.rawValue
-        guard AXIsProcessTrusted() else { return "\(name): HeyVoice needs Accessibility permission to stop it" }
+        guard AXIsProcessTrusted() else { return "\(name): Hey AI needs Accessibility permission to stop it" }
         switch assistant {
         case .claude:
             guard let app = Self.running(Self.claudeBundleID) else { return "Claude isn't running" }
@@ -328,7 +328,7 @@ final class Launcher {
             }
             Keys.press(Keys.v, flags: [.maskControl, .maskShift])
         case .chatgptClassic:
-            return "ChatGPT Classic: HeyVoice can't stop it"
+            return "ChatGPT Classic: Hey AI can't stop it"
         }
         for _ in 0..<15 {
             Thread.sleep(forTimeInterval: 0.2)

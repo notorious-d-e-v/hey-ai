@@ -1,19 +1,16 @@
 import AppKit
+import SwiftUI
 
 /// A small "Done?" bubble shown just above Claude Code's prompt box when you pause while
 /// dictating. It never takes focus or clicks, so dictation carries on underneath it.
 final class NudgePanel {
     private var panel: NSPanel?
-    private let label = NSTextField(labelWithString: "")
 
     /// `anchor` is a screen frame with a top-left origin, as Accessibility reports it.
-    func show(_ text: String, above anchor: CGRect?) {
+    func show(above anchor: CGRect?) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        label.stringValue = text
-        label.sizeToFit()
-        let size = NSSize(width: label.frame.width + 28, height: label.frame.height + 16)
-        label.setFrameOrigin(NSPoint(x: 14, y: 8))
+        let size = panel.contentView?.fittingSize ?? NSSize(width: 320, height: 40)
 
         let origin: NSPoint
         if let anchor, let primary = NSScreen.screens.first {
@@ -47,19 +44,50 @@ final class NudgePanel {
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-
-        let background = NSVisualEffectView()
-        background.material = .hudWindow
-        background.blendingMode = .behindWindow
-        background.state = .active
-        background.wantsLayer = true
-        background.layer?.cornerRadius = 10
-        background.layer?.masksToBounds = true
-        panel.contentView = background
-
-        label.font = .systemFont(ofSize: 13, weight: .medium)
-        label.textColor = .labelColor
-        background.addSubview(label)
+        panel.contentView = NSHostingView(rootView: NudgeView())
         return panel
     }
 }
+
+private struct NudgeView: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            BrandMark().fill(Brand.ink).frame(width: 16, height: 12).padding(.trailing, 4)
+            Text("Done? Say")
+            Spoken("send it")
+            Text("or")
+            Spoken("enter")
+        }
+        .font(.system(size: 13, weight: .medium))
+        .foregroundColor(Brand.ink)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08)))
+        )
+        .padding(2)
+    }
+}
+
+/// Words to say out loud, highlighted per the brand.
+private struct Spoken: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .bold))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 4).fill(Brand.highlight))
+    }
+}
+
+#if SNAPSHOT
+/// The nudge as it appears on screen, for tools/snapshot.sh.
+struct NudgePreview: View {
+    var body: some View { NudgeView().padding(12).background(Color(white: 0.93)) }
+}
+#endif

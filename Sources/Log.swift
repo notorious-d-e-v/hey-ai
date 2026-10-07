@@ -1,16 +1,16 @@
 import Foundation
 
-/// Appends timestamped lines to ~/Library/Logs/HeyVoice/heyvoice.log. Only wake events,
+/// Appends timestamped lines to ~/Library/Logs/HeyAI/heyai.log. Only wake events,
 /// actions and errors are logged — never the running transcript.
 enum Log {
     static let url: URL = {
         let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/HeyVoice", isDirectory: true)
+            .appendingPathComponent("Library/Logs/HeyAI", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("heyvoice.log")
+        return dir.appendingPathComponent("heyai.log")
     }()
 
-    private static let queue = DispatchQueue(label: "heyvoice.log")
+    private static let queue = DispatchQueue(label: "heyai.log")
     private static let formatter = ISO8601DateFormatter()
     private static let maxBytes = 2_000_000
 

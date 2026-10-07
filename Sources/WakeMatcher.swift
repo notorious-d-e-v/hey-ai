@@ -131,7 +131,7 @@ enum WakeMatcher {
     }
 }
 
-/// How you tell HeyVoice a Claude Code dictation is finished.
+/// How you tell Hey AI a Claude Code dictation is finished.
 enum SendPhrase {
     /// Send whenever they end what you said: "…fix the bug, send it".
     static let anywhere = phrases(["send it", "sent it", "send that", "send message", "send the message"])

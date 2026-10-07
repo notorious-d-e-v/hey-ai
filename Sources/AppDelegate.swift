@@ -1,7 +1,8 @@
 import AppKit
 import ApplicationServices
-import IOKit.pwr_mgt
 import AVFoundation
+import Combine
+import IOKit.pwr_mgt
 import ServiceManagement
 import Speech
 
@@ -13,6 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let nudge = NudgePanel()
     /// Where the Claude Code prompt box is, so the nudge can sit just above it.
     private var nudgeAnchor: CGRect?
+
+    private let setup = SetupModel()
+    private var setupWindow: SetupWindowController?
+    private var setupChanges: AnyCancellable?
 
     private var listenerState: WakeListener.State = .stopped
     private var lastHeard = ""
@@ -29,6 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         set { defaults.set(newValue, forKey: "keepScreenAwake") }
     }
 
+    private var setupDone: Bool {
+        get { defaults.bool(forKey: "setupDone") }
+        set { defaults.set(newValue, forKey: "setupDone") }
+    }
+
     private var paused: Bool {
         get { defaults.bool(forKey: "paused") }
         set { defaults.set(newValue, forKey: "paused") }
@@ -42,15 +52,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Lifecycle
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // heyvoice://open/<chatgpt|codex|claude|claude-code>, heyvoice://send/claude-code,
-        // heyvoice://dump/<claude|chatgpt|codex>, heyvoice://login/<on|off>
+        // heyai://open/<chatgpt|codex|claude|claude-code>, heyai://send/claude-code,
+        // heyai://dump/<claude|chatgpt|codex>, heyai://login/<on|off>
         NSAppleEventManager.shared().setEventHandler(
             self, andSelector: #selector(handleURLEvent(_:reply:)),
             forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu.delegate = self
         statusItem.menu = menu
 
@@ -75,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
             Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)")
+            self?.setupHeard(match.target)
             self?.trigger(match.target)
         }
         listener.onSendPhrase = { [weak self] command in
@@ -85,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listener.onNudge = { [weak self] show in
             guard let self else { return }
             if show {
-                self.nudge.show("Done? Say “send it” or “enter” — or keep talking", above: self.nudgeAnchor)
+                self.nudge.show(above: self.nudgeAnchor)
                 let tick = NSSound(named: "Tink")
                 tick?.volume = 0.3
                 tick?.play()
@@ -104,14 +115,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if keepScreenAwake { setKeepScreenAwake(true) }
 
-        Log.info("HeyVoice started")
+        Log.info("Hey AI started")
         updateIcon()
-        if !AXIsProcessTrusted() {
-            // Accessibility lets HeyVoice press ChatGPT's voice shortcut and Claude's voice button.
-            let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+
+        setup.onCanListen = { [weak self] in
+            guard let self, !self.paused else { return }
+            self.listener.start()
         }
-        requestPermissionsAndStart()
+        setup.onFinish = { [weak self] in self?.finishSetup() }
+        // Listen right away if the permissions are already there; otherwise the setup
+        // window asks for them, so the system prompts appear with an explanation.
+        if setup.canListen && !paused { listener.start() }
+        if !setupDone || !setup.allGranted { showSetup() }
+    }
+
+    // MARK: Setup
+
+    @objc private func showSetup() {
+        if setupWindow == nil {
+            setupWindow = SetupWindowController(model: setup)
+            setupChanges = setup.objectWillChange.sink { [weak self] _ in
+                DispatchQueue.main.async { self?.setupWindow?.resizeToFit() }
+            }
+        }
+        setup.startWatching()
+        setupWindow?.present()
+    }
+
+    private func finishSetup() {
+        setupDone = true
+        setup.stopWatching()
+        setLaunchAtLogin(setup.launchAtLogin)
+        setupWindow?.close()
+        setupWindow = nil
+        setupChanges = nil
+    }
+
+    /// The first wake phrase during setup: show it, then get out of the way.
+    private func setupHeard(_ target: WakeTarget) {
+        guard let window = setupWindow?.window, window.isVisible, setup.allGranted else { return }
+        setup.lastHeard = "Heard “\(target.wakePhrase)”. Opening \(target.displayName)…"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.finishSetup() }
     }
 
     private func requestPermissionsAndStart() {
@@ -119,9 +163,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             SFSpeechRecognizer.requestAuthorization { speechStatus in
                 DispatchQueue.main.async {
                     if !micGranted {
-                        self.listenerState = .failed("Microphone access is off. Allow HeyVoice in System Settings → Privacy & Security → Microphone.")
+                        self.listenerState = .failed("Microphone access is off. Allow Hey AI in System Settings → Privacy & Security → Microphone.")
                     } else if speechStatus != .authorized {
-                        self.listenerState = .failed("Speech recognition is off. Allow HeyVoice in System Settings → Privacy & Security → Speech Recognition.")
+                        self.listenerState = .failed("Speech recognition is off. Allow Hey AI in System Settings → Privacy & Security → Speech Recognition.")
                     } else if !self.paused {
                         self.listener.start()
                     }
@@ -287,10 +331,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openLog() { NSWorkspace.shared.open(Log.url) }
 
-    @objc private func openAccessibilitySettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-    }
-
     @objc private func toggleServerRecognition() {
         allowServerRecognition.toggle()
         listener.allowServerRecognition = allowServerRecognition
@@ -352,9 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(testItem)
 
         menu.addItem(.separator())
-        if !AXIsProcessTrusted() {
-            menu.addItem(item("Grant Accessibility Permission…", #selector(openAccessibilitySettings)))
-        }
+        menu.addItem(item(setup.allGranted ? "Set Up Hey AI…" : "Finish Setting Up Hey AI…", #selector(showSetup)))
         let login = item("Launch at Login", #selector(toggleLaunchAtLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
@@ -368,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(server)
 
         menu.addItem(.separator())
-        menu.addItem(item("Quit HeyVoice", #selector(quit), key: "q"))
+        menu.addItem(item("Quit Hey AI", #selector(quit), key: "q"))
     }
 
     private var statusLine: String {
@@ -393,19 +431,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateIcon() {
-        var symbol: String
+        let image: NSImage
         if Date() < flashUntil {
-            symbol = "waveform.circle.fill"
+            image = Brand.menuBarImage(.heard)
         } else if paused {
-            symbol = "waveform.slash"
+            image = Brand.menuBarImage(.paused)
         } else if case .failed = listenerState {
-            symbol = "exclamationmark.triangle"
+            image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Hey AI needs attention")!
+            image.isTemplate = true
+        } else if listener.isWatchingForSend {
+            image = Brand.menuBarImage(.dictating)
         } else {
-            symbol = "waveform"
+            image = Brand.menuBarImage(.listening)
         }
-        if listener.isWatchingForSend && Date() >= flashUntil { symbol = "text.bubble" }
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "HeyVoice")
-        image?.isTemplate = true
         statusItem?.button?.image = image
     }
 }

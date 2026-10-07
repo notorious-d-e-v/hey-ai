@@ -170,7 +170,7 @@ final class WakeListener {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            throw NSError(domain: "HeyVoice", code: 1,
+            throw NSError(domain: "HeyAI", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "no microphone input is available"])
         }
         input.removeTap(onBus: 0)
