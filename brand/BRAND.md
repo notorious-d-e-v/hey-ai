@@ -47,8 +47,9 @@ Contrast (WCAG): Ink on Paper 17:1, Ink on Highlight 12.3:1, Highlight on Ink 12
 
 Highlight marks exactly one thing: words you say to Hey AI.
 
-- **On light backgrounds**, draw a marker stroke behind the phrase: Highlight, covering the lower half of the letters, set slightly off level (−0.6°) with uneven corners, like a real highlighter. Text stays Ink.
-- **On Ink**, set the phrase itself in Highlight with no stroke.
+- **Large phrases on light backgrounds** (banners, cards): draw a marker stroke behind the phrase, covering the lower half of the letters, set slightly off level (−0.6°) with uneven corners, like a real highlighter. Text stays Ink. On the web, where a phrase can wrap, the stroke is drawn level, once per line.
+- **Large phrases on Ink**: set the phrase itself in Highlight, with no stroke.
+- **Small phrases** (pills in the app, tables, chips): a Highlight background with Ink text, on any background. At small sizes the pill reads better than colored text.
 - Never highlight anything else for emphasis: not product names, not prices, not “free”. If everything is yellow, nothing is something to say.
 
 ## Type
@@ -69,10 +70,12 @@ Write the way you'd tell a friend how to use it.
 - **Short and plain.** “Say ‘Hey Claude’. Claude opens, ready to talk.” Not “Unlock seamless voice-first AI workflows.”
 - **Use the real phrases.** Show what to say instead of describing it.
 - **Say what happens.** Buttons name their result (“Allow access”, “Copy”). Errors say what went wrong and what to do next, without apologizing.
-- **Sentence case** everywhere. No all-caps labels and no exclamation marks.
+- **Sentence case** everywhere. No all-caps labels and no exclamation marks. The one exception is macOS menu items, which follow Apple's Title Case convention so the menu feels native.
 - **Honest about limits.** It can't work behind the lock screen; say so.
 
 Words to avoid: seamless, supercharge, revolutionary, effortless, magic, game-changer, unleash, AI-powered.
+
+Posts from a person's own account (the launch thread on X, for example) can keep that person's style, lowercase included. The product's own surfaces (app, site, README, store pages) follow this guide.
 
 ## Motion
 
@@ -86,7 +89,7 @@ One moment: when a phrase appears, the highlighter sweeps in from left to right 
 
 ## Other companies' names
 
-Refer to Claude, Claude Code, ChatGPT and Codex by name in plain text. Never use their logos, colors or typefaces, and never imply endorsement. Wherever the brand appears at length (site, README, store pages), include: *Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project.*
+Refer to Claude, Claude Code, ChatGPT and Codex by name in plain text. Buttons and other controls never use Highlight: it's only for words you say. Never use their logos, colors or typefaces, and never imply endorsement. Wherever the brand appears at length (site, README, store pages), include: *Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project.*
 
 ## Regenerating assets
 

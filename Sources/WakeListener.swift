@@ -302,7 +302,13 @@ final class WakeListener {
     /// Fires once a stop phrase ends the transcript and nothing new follows for a moment.
     private func checkStopPhrase(_ text: String) {
         stopTimer?.invalidate()
-        guard StopPhrase.ends(text) else { return }
+        if isWatchingForSend {
+            // Mid-dictation it has to be said on its own, after a pause.
+            let words = WakeMatcher.normalize(text)
+            guard StopPhrase.isWhole(Array(words.dropFirst(min(utteranceStart, words.count)))) else { return }
+        } else {
+            guard StopPhrase.ends(text) else { return }
+        }
         stopTimer = Timer.scheduledTimer(withTimeInterval: Self.stopSettle, repeats: false) { [weak self] _ in
             guard let self, self.isRunning, self.lastHeardText == text else { return }
             self.sendTimer?.invalidate()

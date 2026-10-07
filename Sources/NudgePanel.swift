@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// A small "Done?" bubble shown just above Claude Code's prompt box when you pause while
-/// dictating. It never takes focus or clicks, so dictation carries on underneath it.
+/// A small "Done? Say yes to send" bubble shown just above Claude Code's prompt box when
+/// you pause while dictating. It never takes focus or clicks, so dictation carries on underneath it.
 final class NudgePanel {
     private var panel: NSPanel?
 
@@ -54,9 +54,8 @@ private struct NudgeView: View {
         HStack(spacing: 6) {
             BrandMark().fill(Brand.ink).frame(width: 16, height: 12).padding(.trailing, 4)
             Text("Done? Say")
-            Spoken("send it")
-            Text("or")
-            Spoken("enter")
+            Spoken("yes")
+            Text("to send, or keep talking.")
         }
         .font(.system(size: 13, weight: .medium))
         .foregroundColor(Brand.ink)

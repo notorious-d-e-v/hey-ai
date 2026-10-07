@@ -1,0 +1,42 @@
+# Builds and publishes a release when a version tag (v1.2.3) is pushed. The zip is built
+# here, from the tagged commit, and gets a build attestation anyone can verify with
+#   gh attestation verify Hey-AI.zip -R notorious-d-e-v/hey-ai
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match Info.plist version $version"
+            exit 1
+          fi
+
+      - name: Build the universal app and release zip
+        run: ./scripts/release.sh
+
+      - name: Attest the build
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/Hey-AI.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Hey-AI.zip dist/Hey-AI.zip.sha256 \
+            --title "Hey AI ${GITHUB_REF_NAME#v}" --notes-file RELEASE_NOTES.md

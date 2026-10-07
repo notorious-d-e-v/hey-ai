@@ -18,7 +18,10 @@ func render<V: View>(_ view: V, _ name: String) {
     window.contentView = host
     host.layoutSubtreeIfNeeded()
     window.displayIfNeeded()
-    guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+    // 2x, so the images are sharp on Retina screens and in the README.
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
+                               bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                               colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     rep.size = size
     host.cacheDisplay(in: host.bounds, to: rep)
     let png = rep.representation(using: .png, properties: [:])!
@@ -31,7 +34,7 @@ fresh.microphone = .needed; fresh.speech = .needed; fresh.accessibility = .neede
 render(SetupView(model: fresh), "setup-1-fresh")
 
 let partial = SetupModel()
-partial.microphone = .granted; partial.speech = .denied; partial.accessibility = .needed; partial.asking = true
+partial.microphone = .granted; partial.speech = .denied; partial.accessibility = .needed; partial.askedAccessibility = true
 render(SetupView(model: partial), "setup-2-partial")
 
 let ready = SetupModel()
@@ -43,11 +46,16 @@ heard.microphone = .granted; heard.speech = .granted; heard.accessibility = .gra
 heard.lastHeard = "Heard “Hey Claude”. Opening Claude…"
 render(SetupView(model: heard), "setup-4-heard")
 
+let notListening = SetupModel()
+notListening.microphone = .granted; notListening.speech = .granted; notListening.accessibility = .granted
+notListening.listenerProblem = "On-device speech recognition isn't available. Turn on Dictation in System Settings → Keyboard so macOS downloads it."
+render(SetupView(model: notListening), "setup-5-not-listening")
+
 render(NudgePreview(), "nudge")
 
 // Menu-bar icon states, drawn by the app's own code, at 4x on transparent.
 let logoDir = CommandLine.arguments.dropFirst(2).first
-if let logoDir {
+if let logoDir, !logoDir.isEmpty {
     let states: [(String, Brand.MenuState)] = [("listening", .listening), ("paused", .paused), ("heard", .heard), ("dictating", .dictating)]
     for (name, state) in states {
         let image = Brand.menuBarImage(state)

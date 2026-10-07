@@ -2,22 +2,48 @@
 # Removes Hey AI, its login item, its settings, its logs and its macOS permissions.
 #
 #   curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/uninstall.sh | bash
-set -euo pipefail
+#
+# Each step carries on if another fails; anything left behind is listed at the end.
+set -uo pipefail
 
-BUNDLE_ID="dev.notorious.heyai"
+main() {
+  local bundle_id="dev.notorious.heyai"
+  local left=()
 
-for dir in /Applications "$HOME/Applications"; do
-  app="$dir/Hey AI.app"
-  [ -d "$app" ] || continue
-  # Turn off launch at login while the app can still unregister itself.
-  open -g "heyai://login/off" 2>/dev/null && sleep 1 || true
-  pkill -x HeyAI 2>/dev/null || true
-  rm -rf "$app"
-  echo "Removed $app"
-done
+  # Hey AI can only remove its own login item while it's running.
+  if pgrep -x HeyAI >/dev/null; then
+    open -g "heyai://login/off" && sleep 1.5
+    pkill -x HeyAI 2>/dev/null
+    sleep 0.5
+  else
+    left+=("If Hey AI still appears in System Settings → General → Login Items, remove it there.")
+  fi
 
-defaults delete "$BUNDLE_ID" 2>/dev/null || true
-rm -rf "$HOME/Library/Logs/HeyAI"
-# Forget the Microphone, Speech Recognition and Accessibility permissions.
-tccutil reset All "$BUNDLE_ID" >/dev/null 2>&1 || true
-echo "Hey AI is uninstalled."
+  local dir app
+  for dir in /Applications "$HOME/Applications"; do
+    app="$dir/Hey AI.app"
+    [ -d "$app" ] || continue
+    if rm -rf "$app" 2>/dev/null; then
+      echo "Removed $app"
+    else
+      left+=("Couldn't delete $app. Drag it to the Trash.")
+    fi
+  done
+
+  defaults delete "$bundle_id" >/dev/null 2>&1
+  rm -rf "$HOME/Library/Logs/HeyAI"
+
+  # Forget the Microphone, Speech Recognition and Accessibility permissions.
+  if ! tccutil reset All "$bundle_id" >/dev/null 2>&1; then
+    left+=("Couldn't reset its permissions. Remove Hey AI under System Settings → Privacy & Security → Microphone, Speech Recognition and Accessibility.")
+  fi
+
+  if [ ${#left[@]} -eq 0 ]; then
+    echo "Hey AI is uninstalled."
+  else
+    echo "Hey AI is mostly uninstalled. Left to do:"
+    printf '  - %s\n' "${left[@]}"
+  fi
+}
+
+main "$@"

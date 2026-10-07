@@ -203,4 +203,10 @@ enum StopPhrase {
         let words = WakeMatcher.normalize(transcript)
         return phrases.contains { words.count >= $0.count && Array(words.suffix($0.count)) == $0 }
     }
+
+    /// True when an utterance is nothing but a stop phrase. Used while dictating, so a
+    /// prompt that happens to end "…then hang up" doesn't stop it.
+    static func isWhole(_ utterance: [String]) -> Bool {
+        phrases.contains(utterance)
+    }
 }

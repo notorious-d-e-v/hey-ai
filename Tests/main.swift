@@ -119,6 +119,9 @@ check(StopPhrase.ends("great, end the call"), "stop: end the call")
 check(!StopPhrase.ends("hang up the laundry"), "stop: hang up mid-sentence")
 check(!StopPhrase.ends("stop listening to that podcast"), "stop: stop listening mid-sentence")
 check(!StopPhrase.ends("stop"), "stop: bare stop")
+check(StopPhrase.isWhole(words("stop listening")), "stop whole: alone")
+check(StopPhrase.isWhole(words("hang up")), "stop whole: hang up alone")
+check(!StopPhrase.isWhole(words("and then hang up")), "stop whole: end of a sentence")
 
 if failures == 0 {
     print("matcher: all \(count) cases passed")

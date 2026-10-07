@@ -13,10 +13,13 @@ final class SetupModel: ObservableObject {
     @Published var speech: Status = .needed
     @Published var accessibility: Status = .needed
     @Published var onDeviceSpeech = true
-    @Published var asking = false
+    /// The Accessibility prompt has been shown; waiting for the switch in System Settings.
+    @Published var askedAccessibility = false
     @Published var launchAtLogin = true
     /// What Hey AI just did, shown on the "try it" screen.
     @Published var lastHeard: String?
+    /// Why Hey AI isn't listening, if it isn't.
+    @Published var listenerProblem: String?
 
     var allGranted: Bool { microphone == .granted && speech == .granted && accessibility == .granted }
     var canListen: Bool { microphone == .granted && speech == .granted }
@@ -24,28 +27,13 @@ final class SetupModel: ObservableObject {
     /// Called once microphone and speech are allowed, so listening can start right away.
     var onCanListen: (() -> Void)?
     var onFinish: (() -> Void)?
+    /// The window was closed with its close button.
+    var onClose: (() -> Void)?
 
-    private var accessibilityTimer: Timer?
     private var refreshTimer: Timer?
+    private var shownAt = Date()
 
     init() { refresh() }
-
-    /// While the window is open, pick up permissions switched on in System Settings.
-    func startWatching() {
-        refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            let couldListen = self.canListen
-            self.refresh()
-            if !couldListen && self.canListen { self.onCanListen?() }
-            if self.allGranted { self.asking = false }
-        }
-    }
-
-    func stopWatching() {
-        refreshTimer?.invalidate()
-        accessibilityTimer?.invalidate()
-    }
 
     func refresh() {
         let mic = Self.status(AVCaptureDevice.authorizationStatus(for: .audio))
@@ -54,24 +42,70 @@ final class SetupModel: ObservableObject {
         // Only publish real changes, so SwiftUI doesn't redraw every second.
         if mic != microphone { microphone = mic }
         if spe != speech { speech = spe }
-        if ax != accessibility { accessibility = ax }
+        if ax != accessibility {
+            accessibility = ax
+            if ax == .granted && askedAccessibility {
+                logStep("Accessibility allowed")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
         let onDevice = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))?.supportsOnDeviceRecognition ?? false
         if onDevice != onDeviceSpeech { onDeviceSpeech = onDevice }
     }
 
-    private let shownAt = Date()
-    private func logStep(_ step: String) {
-        Log.info(String(format: "setup: %@ (%.1f s after the window opened)", step, Date().timeIntervalSince(shownAt)))
+    /// While the window is open, pick up permissions switched on in System Settings.
+    func startWatching() {
+        shownAt = Date()
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let couldListen = self.canListen
+            self.refresh()
+            if !couldListen && self.canListen { self.onCanListen?() }
+        }
     }
 
-    /// The one button: microphone, then speech recognition, then Accessibility.
-    func allowAccess() {
+    func stopWatching() {
+        refreshTimer?.invalidate()
+    }
+
+    // MARK: The one button
+
+    enum Action { case allow, openMicrophone, openSpeech, openAccessibility }
+
+    /// Worked out from the current state, so the button always does something useful.
+    var action: Action {
+        if microphone == .denied { return .openMicrophone }
+        if speech == .denied { return .openSpeech }
+        if askedAccessibility && accessibility != .granted { return .openAccessibility }
+        return .allow
+    }
+
+    var actionTitle: String {
+        switch action {
+        case .allow: return "Allow access"
+        case .openMicrophone: return "Open Microphone settings"
+        case .openSpeech: return "Open Speech Recognition settings"
+        case .openAccessibility: return "Open Accessibility settings"
+        }
+    }
+
+    func perform() {
+        switch action {
+        case .allow: allowAccess()
+        case .openMicrophone: openSettings("Privacy_Microphone")
+        case .openSpeech: openSettings("Privacy_SpeechRecognition")
+        case .openAccessibility: openSettings("Privacy_Accessibility")
+        }
+    }
+
+    /// Microphone, then speech recognition, then Accessibility.
+    private func allowAccess() {
         logStep("Allow access clicked")
-        asking = true
         requestMicrophone { [weak self] in
             self?.requestSpeech {
-                guard let self else { return }
-                if self.canListen { self.onCanListen?() }
+                guard let self, self.canListen else { return }
+                self.onCanListen?()
                 self.requestAccessibility()
             }
         }
@@ -101,28 +135,23 @@ final class SetupModel: ObservableObject {
     }
 
     /// macOS can't grant this from a prompt: it adds Hey AI to the Accessibility list and
-    /// you switch it on. Poll until it's on, then come back to the front.
+    /// you switch it on. The refresh timer notices and brings the window back.
     private func requestAccessibility() {
         guard !AXIsProcessTrusted() else {
             accessibility = .granted
-            asking = false
             return
         }
+        askedAccessibility = true
         let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-        accessibilityTimer?.invalidate()
-        accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
-            guard AXIsProcessTrusted() else { return }
-            timer.invalidate()
-            self?.accessibility = .granted
-            self?.asking = false
-            self?.logStep("Accessibility allowed")
-            NSApp.activate(ignoringOtherApps: true)
-        }
     }
 
     func openSettings(_ pane: String) {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
+    }
+
+    private func logStep(_ step: String) {
+        Log.info(String(format: "setup: %@ (%.1f s after the window opened)", step, Date().timeIntervalSince(shownAt)))
     }
 
     private static func status(_ s: AVAuthorizationStatus) -> Status {
@@ -144,8 +173,15 @@ final class SetupModel: ObservableObject {
 
 /// Which assistants are installed, for the "try it" list.
 struct Assistants {
-    static var claude: Bool { NSWorkspace.shared.urlForApplication(withBundleIdentifier: Launcher.claudeBundleID) != nil }
-    static var chatGPT: Bool { NSWorkspace.shared.urlForApplication(withBundleIdentifier: Launcher.codexBundleID) != nil }
+    static var claude: Bool { installed(Launcher.claudeBundleID) }
+    /// The current ChatGPT app (it includes Codex).
+    static var chatGPT: Bool { installed(Launcher.codexBundleID) }
+    /// Only the older ChatGPT app, which has no voice mode Hey AI can start.
+    static var chatGPTClassicOnly: Bool { !chatGPT && installed("com.openai.chat") }
+
+    private static func installed(_ id: String) -> Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) != nil
+    }
 }
 
 struct SetupView: View {
@@ -187,39 +223,40 @@ private struct PermissionsView: View {
                 .foregroundColor(Brand.graphite)
                 .padding(.bottom, 20)
 
-            PermissionRow(step: 1, title: "Microphone", detail: "Hears the wake phrase. Nothing is recorded or sent anywhere.",
-                          status: model.microphone) { model.openSettings("Privacy_Microphone") }
+            PermissionRow(step: 1, title: "Microphone", detail: "Hears the wake phrase. Nothing is recorded.",
+                          status: model.microphone)
             PermissionRow(step: 2, title: "Speech recognition", detail: "Turns what you say into text, on this Mac.",
-                          status: model.speech) { model.openSettings("Privacy_SpeechRecognition") }
-            PermissionRow(step: 3, title: "Accessibility", detail: "Lets Hey AI press the voice button in Claude and ChatGPT. Switch on Hey AI in the list that opens.",
-                          status: model.asking && model.accessibility != .granted ? .denied : model.accessibility,
-                          linkTitle: model.asking ? "Open Accessibility settings" : "Turn it on in System Settings") {
-                model.openSettings("Privacy_Accessibility")
-            }
+                          status: model.speech)
+            PermissionRow(step: 3, title: "Accessibility",
+                          detail: "Lets Hey AI open a new chat and press the voice button in Claude and ChatGPT.",
+                          status: model.accessibility)
 
             if model.speech == .granted && !model.onDeviceSpeech {
-                Text("On-device speech isn't downloaded yet. Turn on Dictation in System Settings → Keyboard and macOS downloads it.")
-                    .font(.system(size: 12))
-                    .foregroundColor(Brand.graphite)
-                    .padding(.top, 4)
-                    .padding(.bottom, 8)
+                Note("On-device speech isn't downloaded yet. Turn on Dictation in System Settings → Keyboard and macOS downloads it.")
             }
 
-            Button(action: model.allowAccess) {
-                HStack(spacing: 8) {
-                    if model.asking { ProgressView().controlSize(.small).colorScheme(.dark) }
-                    Text(model.asking ? "Waiting for Accessibility" : "Allow access")
+            if model.action == .openAccessibility {
+                HStack(alignment: .top, spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Switch on Hey AI in the list, then come back here. macOS may ask for your password.")
+                        .font(.system(size: 12.5))
+                        .foregroundColor(Brand.graphite)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: 14, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Brand.ink.opacity(model.asking ? 0.7 : 1)))
-                .foregroundColor(.white)
+                .padding(.bottom, 4)
+            }
+
+            Button(action: model.perform) {
+                Text(model.actionTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Brand.ink))
+                    .foregroundColor(.white)
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
-            .disabled(model.asking)
-            .padding(.top, 16)
+            .padding(.top, 12)
         }
     }
 }
@@ -229,8 +266,6 @@ private struct PermissionRow: View {
     let title: String
     let detail: String
     let status: SetupModel.Status
-    var linkTitle = "Turn it on in System Settings"
-    let openSettings: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -244,15 +279,10 @@ private struct PermissionRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 14, weight: .semibold))
-                Text(detail).font(.system(size: 12.5)).foregroundColor(Brand.graphite)
+                Text(status == .denied ? "Turned off. The button below opens the setting." : detail)
+                    .font(.system(size: 12.5))
+                    .foregroundColor(Brand.graphite)
                     .fixedSize(horizontal: false, vertical: true)
-                if status == .denied {
-                    Button(linkTitle, action: openSettings)
-                        .buttonStyle(.link)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundColor(Brand.signal)
-                        .padding(.top, 2)
-                }
             }
             Spacer(minLength: 0)
         }
@@ -264,36 +294,45 @@ private struct ReadyView: View {
     @ObservedObject var model: SetupModel
 
     var body: some View {
+        let hasAssistant = Assistants.claude || Assistants.chatGPT
         VStack(alignment: .leading, spacing: 0) {
-            Text("You're set. Try one now.")
+            Text(model.listenerProblem != nil ? "One more step."
+                 : hasAssistant ? "You're set. Try one now." : "Almost there. Install an assistant.")
                 .font(.system(size: 20, weight: .bold))
+                .padding(.bottom, 8)
+
+            StatusLine(model: model)
                 .padding(.bottom, 16)
 
             if Assistants.claude {
                 PhraseRow(phrase: "Hey Claude", opens: "Claude, in voice mode")
                 PhraseRow(phrase: "Hey Claude Code", opens: "A new Claude Code session, dictating")
             } else {
-                MissingRow(app: "Claude", url: "https://claude.ai/download")
+                MissingRow(text: "Claude isn't installed.", link: "Get Claude", url: "https://claude.ai/download")
             }
             if Assistants.chatGPT {
                 PhraseRow(phrase: "Hey Chatty", opens: "ChatGPT, in voice mode")
                 PhraseRow(phrase: "Hey Codex", opens: "Codex, in voice mode")
+            } else if Assistants.chatGPTClassicOnly {
+                MissingRow(text: "Your ChatGPT app is the older version.", link: "Get the new one",
+                           url: "https://openai.com/chatgpt/download/")
             } else {
-                MissingRow(app: "ChatGPT", url: "https://openai.com/chatgpt/download/")
+                MissingRow(text: "ChatGPT isn't installed.", link: "Get ChatGPT", url: "https://openai.com/chatgpt/download/")
             }
-
-            HStack(spacing: 8) {
-                Circle().fill(Brand.signal).frame(width: 7, height: 7)
-                Text(model.lastHeard ?? "Listening")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(model.lastHeard == nil ? Brand.graphite : Brand.signal)
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 18)
 
             PhraseRow(phrase: "stop listening", opens: "Ends a voice chat", compact: true)
+                .padding(.top, 8)
             PhraseRow(phrase: "send it", opens: "Sends what you dictated to Claude Code", compact: true)
-                .padding(.bottom, 12)
+                .padding(.bottom, 14)
+
+            HStack(alignment: .top, spacing: 8) {
+                BrandMark().fill(Brand.ink).frame(width: 15, height: 11).padding(.top, 3)
+                Text("Hey AI lives in your menu bar. Click the quote mark to pause it or quit.")
+                    .font(.system(size: 12.5))
+                    .foregroundColor(Brand.graphite)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, 16)
 
             Toggle("Start Hey AI when you log in", isOn: $model.launchAtLogin)
                 .toggleStyle(.checkbox)
@@ -311,6 +350,37 @@ private struct ReadyView: View {
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
         }
+    }
+}
+
+/// "Listening", what was just heard, or why it isn't listening.
+private struct StatusLine: View {
+    @ObservedObject var model: SetupModel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(model.listenerProblem == nil ? Brand.signal : Color.orange)
+                .frame(width: 7, height: 7)
+                .padding(.top, 5)
+            Text(model.listenerProblem.map { "Not listening. \($0)" } ?? model.lastHeard ?? "Listening")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(model.lastHeard != nil && model.listenerProblem == nil ? Brand.signal : Brand.graphite)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct Note: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundColor(Brand.graphite)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, 8)
     }
 }
 
@@ -335,13 +405,14 @@ private struct PhraseRow: View {
 }
 
 private struct MissingRow: View {
-    let app: String
+    let text: String
+    let link: String
     let url: String
 
     var body: some View {
         HStack(spacing: 6) {
-            Text("\(app) isn't installed.").font(.system(size: 13)).foregroundColor(Brand.graphite)
-            Button("Get \(app)") { NSWorkspace.shared.open(URL(string: url)!) }
+            Text(text).font(.system(size: 13)).foregroundColor(Brand.graphite)
+            Button(link) { NSWorkspace.shared.open(URL(string: url)!) }
                 .buttonStyle(.link)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(Brand.signal)
@@ -360,6 +431,7 @@ final class SetupWindowController: NSWindowController, NSWindowDelegate {
                               backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.title = "Hey AI"
         window.isMovableByWindowBackground = true
         window.backgroundColor = .white
         window.appearance = NSAppearance(named: .aqua)
@@ -370,6 +442,10 @@ final class SetupWindowController: NSWindowController, NSWindowDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    func windowWillClose(_ notification: Notification) {
+        model.onClose?()
+    }
 
     func present() {
         model.refresh()
@@ -384,8 +460,10 @@ final class SetupWindowController: NSWindowController, NSWindowDelegate {
         guard let window, let content = window.contentView else { return }
         let size = content.fittingSize
         var frame = window.frame
-        frame.origin.y += frame.height - window.frameRect(forContentRect: NSRect(origin: .zero, size: size)).height
-        frame.size = window.frameRect(forContentRect: NSRect(origin: .zero, size: size)).size
+        let target = window.frameRect(forContentRect: NSRect(origin: .zero, size: size))
+        guard abs(target.height - frame.height) > 0.5 else { return }
+        frame.origin.y += frame.height - target.height
+        frame.size = target.size
         window.setFrame(frame, display: true, animate: true)
     }
 }

@@ -149,11 +149,13 @@ final class Launcher {
         // A cold-launched app needs a moment before its shortcuts are wired up.
         Thread.sleep(forTimeInterval: wasRunning ? 0.3 : 3)
 
-        guard Self.isFrontmost(bundleID) else { return "\(name) lost focus before voice could start" }
-        Keys.press(newChat.key, flags: newChat.flags)
+        guard Keys.press(newChat.key, flags: newChat.flags, in: bundleID) else {
+            return "\(name): you switched apps, so voice wasn't started"
+        }
         Thread.sleep(forTimeInterval: 1.0)
-        guard Self.isFrontmost(bundleID) else { return "\(name) lost focus before voice could start" }
-        Keys.press(Keys.v, flags: [.maskControl, .maskShift])
+        guard Keys.press(Keys.v, flags: [.maskControl, .maskShift], in: bundleID) else {
+            return "\(name): you switched apps, so voice wasn't started"
+        }
         return "\(name): new chat + voice shortcut sent"
     }
 
@@ -232,17 +234,19 @@ final class Launcher {
         reader.focus(composer.textArea.element)
         let idle = reader.micState(composer.micButton)
         Log.info("Claude Code: mic button \(idle) before dictation")
-        let dictating = Result(message: "Claude Code: dictating — say “send it” or “enter” to send",
+        let dictating = Result(message: "Claude Code: dictating. Say “send it” or “enter” to send.",
                                awaitingSend: true, anchor: composer.textArea.frame)
         codeSession = (reader, composer)
         if idle.isRecording { return dictating }
 
-        Keys.press(Keys.d, flags: .maskCommand)
+        let claude = Self.claudeBundleID
+        let switched = Result(message: "Claude Code: you switched apps, so dictation wasn't started")
+        guard Keys.press(Keys.d, flags: .maskCommand, in: claude) else { codeSession = nil; return switched }
         if reader.waitForMic(composer.micButton, recording: true, baseline: idle, timeout: 2.5) {
             return dictating
         }
         Log.info("Claude Code: ⌘D didn't start dictation; clicking the mic button")
-        Mouse.click(at: composer.micButton.frame.center)
+        guard Mouse.click(at: composer.micButton.frame.center, in: claude) else { codeSession = nil; return switched }
         if reader.waitForMic(composer.micButton, recording: true, baseline: idle, timeout: 2.5) {
             return dictating
         }
@@ -262,12 +266,17 @@ final class Launcher {
             return "Claude Code: couldn't find the prompt box to send"
         }
 
+        // Every key press below checks Claude is still in front first: if you switched
+        // apps, Return must not go to Slack or a terminal.
+        let claude = Self.claudeBundleID
+        let switched = "Claude Code: you switched apps, so the prompt wasn't sent"
+
         // Stop dictation. Clicking toggles it too, if the shortcut doesn't.
         let state = reader.micState(composer.micButton)
         if state.isRecording {
-            Keys.press(Keys.d, flags: .maskCommand)
+            guard Keys.press(Keys.d, flags: .maskCommand, in: claude) else { return switched }
             if !reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 3) {
-                Mouse.click(at: composer.micButton.frame.center)
+                guard Mouse.click(at: composer.micButton.frame.center, in: claude) else { return switched }
                 _ = reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 3)
             }
         }
@@ -283,8 +292,10 @@ final class Launcher {
 
         reader.focus(composer.textArea.element)
         if trailing > 0 {
-            Keys.press(Keys.downArrow, flags: .maskCommand) // caret to the end
-            for _ in 0..<trailing { Keys.press(Keys.delete, flags: []) }
+            guard Keys.press(Keys.downArrow, flags: .maskCommand, in: claude) else { return switched } // caret to the end
+            for _ in 0..<trailing {
+                guard Keys.press(Keys.delete, flags: [], in: claude) else { return switched }
+            }
             Thread.sleep(forTimeInterval: 0.3)
             let edited = reader.text(of: composer.textArea.element).trimmingCharacters(in: .whitespacesAndNewlines)
             guard edited == prompt else {
@@ -292,7 +303,7 @@ final class Launcher {
                 return "Claude Code: couldn't remove the send command cleanly, so the prompt wasn't sent"
             }
         }
-        Keys.press(Keys.returnKey, flags: [])
+        guard Keys.press(Keys.returnKey, flags: [], in: claude) else { return switched }
         for _ in 0..<12 {
             Thread.sleep(forTimeInterval: 0.25)
             if reader.text(of: composer.textArea.element).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -326,7 +337,9 @@ final class Launcher {
             guard Self.waitUntilFrontmost(Self.codexBundleID, timeout: 4) else {
                 return "ChatGPT didn't come to the front to stop voice"
             }
-            Keys.press(Keys.v, flags: [.maskControl, .maskShift])
+            guard Keys.press(Keys.v, flags: [.maskControl, .maskShift], in: Self.codexBundleID) else {
+                return "ChatGPT: you switched apps, so voice wasn't stopped"
+            }
         case .chatgptClassic:
             return "ChatGPT Classic: Hey AI can't stop it"
         }
@@ -346,10 +359,10 @@ final class Launcher {
         let state = reader.micState(composer.micButton)
         guard state.isRecording else { return true }
         Self.activate(Self.claudeBundleID)
-        _ = Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 4)
-        Keys.press(Keys.d, flags: .maskCommand)
+        guard Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 4),
+              Keys.press(Keys.d, flags: .maskCommand, in: Self.claudeBundleID) else { return false }
         if reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 2) { return true }
-        Mouse.click(at: composer.micButton.frame.center)
+        guard Mouse.click(at: composer.micButton.frame.center, in: Self.claudeBundleID) else { return false }
         return reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 2)
     }
 
@@ -459,6 +472,18 @@ enum Keys {
     static let delete: CGKeyCode = 51     // kVK_Delete (backspace)
     static let downArrow: CGKeyCode = 125 // kVK_DownArrow
 
+    /// Presses a key only if `bundleID` is still the frontmost app, so a key meant for
+    /// Claude or ChatGPT can never land in whatever you switched to. False if it wasn't.
+    @discardableResult
+    static func press(_ key: CGKeyCode, flags: CGEventFlags, in bundleID: String) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID else {
+            Log.info("didn't press key \(key): \(bundleID) is no longer in front")
+            return false
+        }
+        press(key, flags: flags)
+        return true
+    }
+
     /// Posts a key press to the frontmost app. Needs Accessibility permission.
     static func press(_ key: CGKeyCode, flags: CGEventFlags) {
         if Session.isScreenLocked { Log.info("screen is locked: key \(key) goes to the lock screen, not the app") }
@@ -473,6 +498,17 @@ enum Keys {
 }
 
 enum Mouse {
+    /// Clicks only if `bundleID` is still the frontmost app. False if it wasn't.
+    @discardableResult
+    static func click(at point: CGPoint, in bundleID: String) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID else {
+            Log.info("didn't click: \(bundleID) is no longer in front")
+            return false
+        }
+        click(at: point)
+        return true
+    }
+
     /// Clicks at a screen point (top-left origin, as Accessibility reports frames), then
     /// puts the pointer back.
     static func click(at point: CGPoint) {
@@ -708,29 +744,42 @@ final class AXReader {
         return false
     }
 
-    /// Text dump of web pages, text areas and buttons, for tuning the heuristics. When no
-    /// page is visible at all, falls back to an outline of the window tree.
+    /// A page URL with conversation and session IDs blanked, safe to paste in an issue.
+    static func redacted(_ url: String) -> String {
+        guard var parts = URLComponents(string: url) else { return "<url>" }
+        parts.query = nil
+        parts.fragment = nil
+        parts.path = parts.path.split(separator: "/").map { segment in
+            segment.count > 12 || segment.contains(where: \.isNumber) ? "<id>" : String(segment)
+        }.reduce("") { "\($0)/\($1)" }
+        return parts.string ?? "<url>"
+    }
+
+    /// Dump of the controls around the prompt box, for fixing the button lookups when an
+    /// app changes its layout. It lists only roles, names and positions near the composer:
+    /// never text you typed or dictated, and never the sidebar (whose buttons are named
+    /// after your chats). When no page is visible, it outlines the window tree instead.
     func describeControls() -> [String] {
         var lines: [String] = []
         var areas = webAreas()
         if let focused = focusedWebArea() {
-            lines.append("focused element is inside web area \(focused.1)")
+            lines.append("focused element is inside web area \(Self.redacted(focused.1))")
             areas.insert(focused, at: 0)
         }
         for (webArea, url) in areas {
-            lines.append("web area: \(url)")
+            lines.append("web area: \(Self.redacted(url))")
             let controls = collect(in: webArea, roles: nil)
-            let composer = controls
-                .filter { ($0.role == "AXTextArea" || $0.role == "AXTextField") && $0.frame.width > 250 }
-                .max { $0.frame.width < $1.frame.width }
-            for c in controls {
+            guard let composer = controls
+                .filter({ ($0.role == "AXTextArea" || $0.role == "AXTextField") && $0.frame.width > 250 })
+                .max(by: { $0.frame.width < $1.frame.width }) else {
+                lines.append("  no prompt box on this page")
+                continue
+            }
+            let ta = composer.frame
+            for c in controls where c.role != "AXStaticText" {
                 let f = c.frame
-                // Buttons and text fields everywhere; every element around the composer.
-                let nearComposer = composer.map { ta in
-                    f.midY > ta.frame.minY - 20 && f.midY < ta.frame.maxY + 90
-                        && f.midX > ta.frame.minX - 60 && f.midX < ta.frame.maxX + 100
-                } ?? false
-                guard nearComposer || ["AXButton", "AXTextArea", "AXTextField"].contains(c.role) else { continue }
+                guard f.midY > ta.minY - 20, f.midY < ta.maxY + 90,
+                      f.midX > ta.minX - 60, f.midX < ta.maxX + 100 else { continue }
                 lines.append("  \(c.role)\(c.subrole.isEmpty ? "" : "/\(c.subrole)") \"\(c.label)\" x=\(Int(f.minX)) y=\(Int(f.minY)) w=\(Int(f.width)) h=\(Int(f.height))")
             }
         }
@@ -742,7 +791,8 @@ final class AXReader {
         return lines
     }
 
-    /// Every menu command with its keyboard shortcut, e.g. "File > New Chat ⌘N".
+    /// Every menu command with its keyboard shortcut, e.g. "File > New Chat ⌘N". Skips the
+    /// menus that list your chats or windows by name.
     func describeMenus() -> [String] {
         guard let bar = copy(app, kAXMenuBarAttribute) else { return ["no menu bar"] }
         var lines: [String] = []
@@ -751,6 +801,7 @@ final class AXReader {
             for child in children(element) {
                 let title = string(child, kAXTitleAttribute)
                 let role = string(child, kAXRoleAttribute)
+                if depth == 0, ["Chats", "History", "Window"].contains(title) { continue }
                 let here = title.isEmpty ? path : (path.isEmpty ? title : "\(path) > \(title)")
                 if role == "AXMenuItem", !title.isEmpty {
                     let key = string(child, kAXMenuItemCmdCharAttribute)
@@ -764,13 +815,22 @@ final class AXReader {
         return lines
     }
 
-    /// Buttons and other controls in the app's windows.
+    /// Controls around each window's prompt box (the sidebar is skipped: its buttons are
+    /// named after your chats).
     func describeWindowControls() -> [String] {
         var lines: [String] = []
         for window in windows() {
-            lines.append("window: \(string(window, kAXTitleAttribute))")
-            for c in collect(in: window, roles: ["AXButton", "AXCheckBox", "AXPopUpButton", "AXMenuButton", "AXTextArea", "AXTextField"]) {
+            lines.append("window")
+            let controls = collect(in: window, roles: ["AXButton", "AXCheckBox", "AXPopUpButton", "AXMenuButton", "AXTextArea", "AXTextField"])
+            let composer = controls
+                .filter { ($0.role == "AXTextArea" || $0.role == "AXTextField") && $0.frame.width > 250 }
+                .max { $0.frame.width < $1.frame.width }
+            for c in controls {
                 let f = c.frame
+                if let ta = composer?.frame {
+                    guard f.midY > ta.minY - 40, f.midY < ta.maxY + 90,
+                          f.midX > ta.minX - 60, f.midX < ta.maxX + 100 else { continue }
+                }
                 let extra = [("id", "AXIdentifier"), ("help", kAXHelpAttribute), ("desc", kAXDescriptionAttribute)]
                     .compactMap { name, attribute -> String? in
                         let value = string(c.element, attribute)
@@ -841,7 +901,8 @@ final class AXReader {
             index += 1
             let role = string(element, kAXRoleAttribute)
             if roles?.contains(role) ?? true, let frame = frame(element) {
-                let label = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute, kAXValueAttribute]
+                // Never a control's value: for text boxes that is what you typed or dictated.
+                let label = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute]
                     .map { string(element, $0) }
                     .first { !$0.isEmpty } ?? ""
                 result.append(AXControl(element: element, role: role,

@@ -1,0 +1,15 @@
+# Runs the phrase tests and a full universal build on every push and pull request.
+name: Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./build.sh
+      - run: bash -n install.sh uninstall.sh scripts/release.sh

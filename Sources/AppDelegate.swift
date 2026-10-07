@@ -51,6 +51,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Lifecycle
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // One copy at a time: a second one (say, from ~/Applications) would also listen.
+        let mine = ProcessInfo.processInfo.processIdentifier
+        if let other = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+            .first(where: { $0.processIdentifier != mine }) {
+            Log.info("another Hey AI is already running (pid \(other.processIdentifier)); quitting this one")
+            exit(0)
+        }
         // heyai://open/<chatgpt|codex|claude|claude-code>, heyai://send/claude-code,
         // heyai://dump/<claude|chatgpt|codex>, heyai://login/<on|off>
         NSAppleEventManager.shared().setEventHandler(
@@ -65,8 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         listener.allowServerRecognition = allowServerRecognition
         listener.onState = { [weak self] state in
-            self?.listenerState = state
-            self?.updateIcon()
+            guard let self else { return }
+            self.listenerState = state
+            if case .failed(let reason) = state { self.setup.listenerProblem = reason } else { self.setup.listenerProblem = nil }
+            self.updateIcon()
         }
         listener.onWake = { [weak self] match, heard in
             // Saying a wake phrase while talking to an assistant shouldn't open a new one.
@@ -121,6 +130,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.listener.start()
         }
         setup.onFinish = { [weak self] in self?.finishSetup() }
+        // Closing the window once everything is allowed counts as done; closing it
+        // earlier leaves setup to finish next time.
+        setup.onClose = { [weak self] in
+            guard let self else { return }
+            if self.setup.allGranted {
+                self.finishSetup()
+            } else {
+                self.setup.stopWatching()
+                self.setupWindow = nil
+                self.setupChanges = nil
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
         // Listen right away if the permissions are already there; otherwise the setup
         // window asks for them, so the system prompts appear with an explanation.
         if setup.canListen && !paused { listener.start() }
@@ -130,6 +152,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Setup
 
     @objc private func showSetup() {
+        // A Dock icon while setup is open, so the window can't get lost behind System Settings.
+        NSApp.setActivationPolicy(.regular)
+        setup.launchAtLogin = setupDone ? SMAppService.mainApp.status == .enabled : true
         if setupWindow == nil {
             setupWindow = SetupWindowController(model: setup)
             setupChanges = setup.objectWillChange.sink { [weak self] _ in
@@ -141,12 +166,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func finishSetup() {
+        guard !setupDone || setupWindow != nil else { return }
         setupDone = true
         setup.stopWatching()
         setLaunchAtLogin(setup.launchAtLogin)
-        setupWindow?.close()
+        let window = setupWindow
         setupWindow = nil
         setupChanges = nil
+        window?.close()
+        NSApp.setActivationPolicy(.accessory)
+        updateIcon()
     }
 
     /// The first wake phrase during setup: show it, then get out of the way.
@@ -360,7 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(info(statusLine))
         if listener.isWatchingForSend {
-            menu.addItem(info("Dictating to Claude Code — say “send it” or “enter”"))
+            menu.addItem(info("Dictating to Claude Code. Say “send it” or “enter”."))
             menu.addItem(item("Send Now", #selector(sendNow)))
             menu.addItem(item("Don’t Send", #selector(stopWaitingForSend)))
         }
@@ -406,6 +435,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusLine: String {
         if paused { return "Paused" }
+        if !setup.canListen { return "Needs microphone and speech recognition. Open setup below." }
         switch listenerState {
         case .stopped: return "Starting…"
         case .listening(let onDevice): return onDevice ? "Listening (on-device)" : "Listening (online)"
@@ -425,13 +455,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    private var listenerFailed: Bool {
+        if case .failed = listenerState { return true }
+        return false
+    }
+
     private func updateIcon() {
         let image: NSImage
         if Date() < flashUntil {
             image = Brand.menuBarImage(.heard)
         } else if paused {
             image = Brand.menuBarImage(.paused)
-        } else if case .failed = listenerState {
+        } else if listenerFailed || !setup.canListen {
             image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Hey AI needs attention")!
             image.isTemplate = true
         } else if listener.isWatchingForSend {
