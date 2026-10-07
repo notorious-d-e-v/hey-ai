@@ -91,6 +91,21 @@ final class Launcher {
         }
     }
 
+    /// Ends the voice chat (or dictation) that `assistant` has open.
+    func endVoice(_ assistant: MicActivity.Assistant, completion: @escaping (String) -> Void) {
+        queue.async { completion(self.endVoiceNow(assistant)) }
+    }
+
+    /// Stops the Claude Code dictation HeyVoice started, without sending.
+    func stopClaudeCodeDictation(completion: @escaping (String) -> Void) {
+        queue.async {
+            self.codeSession = nil
+            completion(self.stopClaudeCodeDictationNow()
+                ? "Claude Code: stopped dictating (prompt not sent)"
+                : "Claude Code: couldn't stop dictation")
+        }
+    }
+
     func dumpClaudeControls(completion: @escaping (String) -> Void) {
         queue.async {
             guard let app = Self.running(Self.claudeBundleID) else { return completion("Claude isn't running") }
@@ -287,6 +302,57 @@ final class Launcher {
         return "Claude Code: pressed Return (couldn't confirm the prompt was sent)"
     }
 
+    // MARK: Stop listening
+
+    private func endVoiceNow(_ assistant: MicActivity.Assistant) -> String {
+        let name = assistant.rawValue
+        guard AXIsProcessTrusted() else { return "\(name): HeyVoice needs Accessibility permission to stop it" }
+        switch assistant {
+        case .claude:
+            guard let app = Self.running(Self.claudeBundleID) else { return "Claude isn't running" }
+            let reader = AXReader(pid: app.processIdentifier)
+            reader.enableWebAccessibility()
+            if let stop = reader.claudeVoiceStopButton() {
+                Log.info("Claude: pressing “\(stop.label)” to end voice mode")
+                reader.press(stop.element)
+            } else if !stopClaudeCodeDictationNow() {
+                let lines = reader.describeControls()
+                Log.info("Claude: no Stop button found. Controls seen:\n" + lines.joined(separator: "\n"))
+                return "Claude: couldn't find how to stop it"
+            }
+        case .chatgpt:
+            // ⌃⇧V starts *or stops* the voice chat; it only reaches the app when it's in front.
+            Self.activate(Self.codexBundleID)
+            guard Self.waitUntilFrontmost(Self.codexBundleID, timeout: 4) else {
+                return "ChatGPT didn't come to the front to stop voice"
+            }
+            Keys.press(Keys.v, flags: [.maskControl, .maskShift])
+        case .chatgptClassic:
+            return "ChatGPT Classic: HeyVoice can't stop it"
+        }
+        for _ in 0..<15 {
+            Thread.sleep(forTimeInterval: 0.2)
+            if MicActivity.assistantListening() != assistant { return "\(name): stopped listening" }
+        }
+        return "\(name): asked it to stop, but it's still using the microphone"
+    }
+
+    /// Toggles Claude Code dictation off if it's on. True if it ended up off.
+    private func stopClaudeCodeDictationNow() -> Bool {
+        guard let app = Self.running(Self.claudeBundleID) else { return false }
+        let reader = AXReader(pid: app.processIdentifier)
+        reader.enableWebAccessibility()
+        guard let composer = reader.findCodeComposer(requireNewSession: false) else { return false }
+        let state = reader.micState(composer.micButton)
+        guard state.isRecording else { return true }
+        Self.activate(Self.claudeBundleID)
+        _ = Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 4)
+        Keys.press(Keys.d, flags: .maskCommand)
+        if reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 2) { return true }
+        Mouse.click(at: composer.micButton.frame.center)
+        return reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 2)
+    }
+
     private static func claudeReader() -> AXReader? {
         guard let app = waitUntilRunning(claudeBundleID, timeout: 25) else { return nil }
         activate(claudeBundleID)
@@ -371,6 +437,17 @@ final class Launcher {
     }
 }
 
+// MARK: - Session
+
+enum Session {
+    /// True while the lock screen is up. Simulated key presses and clicks go to the lock
+    /// screen then, not to the app.
+    static var isScreenLocked: Bool {
+        guard let info = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        return info["CGSSessionScreenIsLocked"] as? Bool ?? false
+    }
+}
+
 // MARK: - Keyboard
 
 enum Keys {
@@ -384,6 +461,7 @@ enum Keys {
 
     /// Posts a key press to the frontmost app. Needs Accessibility permission.
     static func press(_ key: CGKeyCode, flags: CGEventFlags) {
+        if Session.isScreenLocked { Log.info("screen is locked: key \(key) goes to the lock screen, not the app") }
         let source = CGEventSource(stateID: .hidSystemState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
@@ -583,6 +661,30 @@ final class AXReader {
 
     func focus(_ element: AXUIElement) {
         AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    }
+
+    /// The Stop / Cancel button of a live (or connecting) Claude voice chat.
+    func claudeVoiceStopButton() -> AXControl? {
+        var areas = webAreas()
+        if let focused = focusedWebArea() { areas.insert(focused, at: 0) }
+        for (webArea, url) in areas {
+            guard let components = URLComponents(string: url),
+                  components.host?.hasSuffix("claude.ai") == true,
+                  !components.path.hasPrefix("/epitaxy") else { continue }
+            let controls = collect(in: webArea, roles: ["AXTextArea", "AXButton"])
+            guard let textArea = controls
+                .filter({ $0.role == "AXTextArea" && $0.frame.width > 250 })
+                .max(by: { $0.frame.width < $1.frame.width }) else { continue }
+            let region = ClaudeComposer(textArea: textArea, webArea: webArea, voiceButtonCandidates: []).region
+            if let stop = controls.first(where: { c in
+                let label = c.label.lowercased()
+                return c.role == "AXButton" && region.contains(c.frame.center)
+                    && (label == "stop" || label == "cancel" || label.contains("end voice"))
+            }) {
+                return stop
+            }
+        }
+        return nil
     }
 
     /// Once pressed, the button stops offering "Use voice mode" (it becomes Cancel / Stop

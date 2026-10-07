@@ -22,6 +22,8 @@ final class WakeListener {
     /// A send command ended the transcript; passes the command's words so they can be
     /// removed from the prompt.
     var onSendPhrase: (([String]) -> Void)?
+    /// "Stop listening" (or another stop phrase) ended what was heard.
+    var onStopPhrase: (() -> Void)?
     /// Show (true) or hide (false) the "Done?" nudge.
     var onNudge: ((Bool) -> Void)?
     /// The send watch timed out or listening stopped.
@@ -56,12 +58,15 @@ final class WakeListener {
     private var nudgedAt: Date?
     private var sendTimer: Timer?
     private var sendWatchTimer: Timer?
+    private var stopTimer: Timer?
 
     private static let rotateInterval: TimeInterval = 50
     private static let cooldown: TimeInterval = 3
     private static let continuationWait: TimeInterval = 0.5
     /// Quiet after a send command before it counts, so "send it to the API…" doesn't fire.
     private static let sendSettle: TimeInterval = 1.0
+    /// Quiet after a stop phrase before it counts (short: stopping should feel immediate).
+    private static let stopSettle: TimeInterval = 0.4
     /// Quiet that splits speech into utterances ("…fix the bug. [pause] Enter.").
     private static let utterancePause: TimeInterval = 0.8
     private static let nudgeAfter: TimeInterval = 2.0
@@ -243,6 +248,7 @@ final class WakeListener {
                 lastHeardText = text
                 lastHeardChange = Date()
             }
+            checkStopPhrase(text)
             if isWatchingForSend {
                 checkSendPhrase(text)
             } else if Date() >= cooldownUntil, let match = firstMatch(in: result) {
@@ -295,6 +301,18 @@ final class WakeListener {
                 Log.info("after “\(words[i])” heard: “\(words[(i + 1)...].prefix(4).joined(separator: " "))”")
             }
             self.fire(pending.match, text: pending.text)
+        }
+    }
+
+    /// Fires once a stop phrase ends the transcript and nothing new follows for a moment.
+    private func checkStopPhrase(_ text: String) {
+        stopTimer?.invalidate()
+        guard StopPhrase.ends(text) else { return }
+        stopTimer = Timer.scheduledTimer(withTimeInterval: Self.stopSettle, repeats: false) { [weak self] _ in
+            guard let self, self.isRunning, self.lastHeardText == text else { return }
+            self.sendTimer?.invalidate()
+            self.onStopPhrase?()
+            self.startTask()
         }
     }
 

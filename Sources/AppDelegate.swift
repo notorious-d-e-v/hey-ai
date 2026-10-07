@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // heyvoice://open/<chatgpt|codex|claude|claude-code>, heyvoice://send/claude-code,
-        // heyvoice://dump/<claude|chatgpt|codex>
+        // heyvoice://dump/<claude|chatgpt|codex>, heyvoice://login/<on|off>
         NSAppleEventManager.shared().setEventHandler(
             self, andSelector: #selector(handleURLEvent(_:reply:)),
             forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
@@ -54,17 +54,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listener.onWake = { [weak self] match, heard in
             // Saying a wake phrase while talking to an assistant shouldn't open a new one.
             if let busy = MicActivity.assistantListening() {
-                Log.info("heard \"\(match.phrase)\" but \(busy) is already listening; ignored")
-                self?.lastAction = "Ignored “\(match.target.wakePhrase)”: \(busy) is already listening"
+                Log.info("heard \"\(match.phrase)\" but \(busy.rawValue) is already listening; ignored")
+                self?.lastAction = "Ignored “\(match.target.wakePhrase)”: \(busy.rawValue) is already listening"
                 return
             }
-            Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)")
+            Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)\(Session.isScreenLocked ? " (screen locked)" : "")")
             self?.trigger(match.target)
         }
         listener.onSendPhrase = { [weak self] command in
             Log.info("heard “\(command.joined(separator: " "))” → send")
             self?.sendClaudeCodePrompt(command: command)
         }
+        listener.onStopPhrase = { [weak self] in self?.stopListening() }
         listener.onNudge = { [weak self] show in
             guard let self else { return }
             if show {
@@ -142,6 +143,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// "Stop listening": end whatever voice chat or dictation is open, right away.
+    private func stopListening() {
+        if listener.isWatchingForSend {
+            Log.info("heard “stop listening” → stop Claude Code dictation")
+            listener.stopWatchingForSend()
+            launcher.stopWatchingDictation()
+            nudge.hide()
+            updateIcon()
+            launcher.stopClaudeCodeDictation { [weak self] result in
+                Log.info(result)
+                DispatchQueue.main.async { self?.report(result) }
+            }
+            return
+        }
+        guard let assistant = MicActivity.assistantListening() else { return }
+        Log.info("heard “stop listening” → stop \(assistant.rawValue)\(Session.isScreenLocked ? " (screen locked)" : "")")
+        launcher.endVoice(assistant) { [weak self] result in
+            Log.info(result)
+            DispatchQueue.main.async { self?.report(result) }
+        }
+    }
+
     /// `command` is the spoken send command to remove from the prompt; nil when dictation
     /// stopped on its own or Send Now was chosen.
     private func sendClaudeCodePrompt(command: [String]?) {
@@ -170,6 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch (url.host?.lowercased(), name) {
         case ("open", _) where WakeTarget(rawValue: name) != nil:
             trigger(WakeTarget(rawValue: name)!)
+        case ("login", "on"), ("login", "off"):
+            setLaunchAtLogin(name == "on")
         case ("send", "claude-code"):
             sendNow()
         case ("dump", "chatgpt"), ("dump", "codex"):
@@ -235,13 +260,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleLaunchAtLogin() {
+        setLaunchAtLogin(SMAppService.mainApp.status != .enabled)
+    }
+
+    private func setLaunchAtLogin(_ on: Bool) {
         let service = SMAppService.mainApp
         do {
-            if service.status == .enabled {
-                try service.unregister()
-            } else {
-                try service.register()
-            }
+            if on { try service.register() } else { try service.unregister() }
+            Log.info("launch at login \(on ? "on" : "off") (status \(service.status.rawValue))")
         } catch {
             Log.info("launch at login: \(error.localizedDescription)")
             lastAction = "Launch at login failed: \(error.localizedDescription)"

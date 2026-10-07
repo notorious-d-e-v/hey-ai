@@ -18,6 +18,8 @@ Claude Code has no back-and-forth voice mode, only dictation. Speak your prompt,
 
 HeyVoice stops dictation, deletes the spoken command from the prompt, and presses Return. A pause by itself never sends.
 
+Say **"stop listening"** (or "end voice chat", "end the call", "hang up") to end whatever is listening right away, without waiting for the app to wind down. HeyVoice presses Claude's Stop button, presses ⌃⇧V again in the ChatGPT app (it starts or stops voice), or stops a Claude Code dictation without sending it. The phrase has to end what you said, so "hang up the laundry" does nothing.
+
 Wake phrases are ignored while Claude or the ChatGPT app is already using the microphone (a voice chat or dictation is open), so talking to an assistant can't open a second one. HeyVoice checks this with Core Audio, which reports every process that is capturing input.
 
 Wake-phrase detection uses Apple's on-device speech recognizer, so audio never leaves the Mac. Nothing you say is logged. The log only records wake events and errors.
@@ -50,7 +52,7 @@ On first launch, macOS asks for three permissions:
 - **Pause / Resume Listening**: turns the microphone off and on.
 - **Send Now / Don't Send**: shown while a Claude Code dictation is open.
 - **Test**: run any of the four actions without speaking, or write Claude's on-screen controls to the log. That dump is how to fix the Claude button lookup if Claude changes its page.
-- **Launch at Login**.
+- **Launch at Login**: on means HeyVoice starts in the background whenever you log in. `open heyvoice://login/on` (or `off`) does the same from the terminal.
 - **Allow Online Speech Recognition**: off by default. It only matters when on-device recognition is unavailable, and it sends microphone audio to Apple.
 
 You can also run the actions from the terminal while HeyVoice is running:
@@ -77,6 +79,7 @@ Log: `~/Library/Logs/HeyVoice/heyvoice.log`
 
 ## Known limits
 
+- **Locked screen.** HeyVoice keeps listening while the screen is locked or asleep, but macOS sends simulated key presses and clicks to the lock screen, not to apps. Steps that use them (ChatGPT's ⌘N/⌘⌥O and ⌃⇧V, Claude Code's ⌘D) can't work until you unlock. The log marks events that happened while the screen was locked. After a restart, nothing runs until you log in.
 - The microphone is open the whole time, so the orange mic dot stays on.
 - If AirPods are your input device, macOS switches them to call-quality audio while any app holds the mic. Use the Mac's built-in mic as the input to avoid this.
 - Each app step depends on that app's current links, shortcuts and page layout. If either app changes, the Test menu and the log show which step failed.

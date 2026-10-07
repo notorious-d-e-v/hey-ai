@@ -190,3 +190,17 @@ enum SendPhrase {
         String(text.dropLast(trailingLength(text, command: command))).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+/// "Stop listening" — ends whichever voice chat or dictation is open.
+enum StopPhrase {
+    static let phrases: [[String]] = [
+        "stop listening", "stop voice mode", "stop voice chat", "end voice mode", "end voice chat",
+        "end the voice chat", "end the chat", "end chat", "end the call", "end call", "hang up",
+    ].map(WakeMatcher.normalize)
+
+    /// True when what was heard ends with a stop phrase.
+    static func ends(_ transcript: String) -> Bool {
+        let words = WakeMatcher.normalize(transcript)
+        return phrases.contains { words.count >= $0.count && Array(words.suffix($0.count)) == $0 }
+    }
+}

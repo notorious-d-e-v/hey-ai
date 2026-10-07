@@ -111,6 +111,15 @@ expectStrip("Please send it to the API", "send it", "Please send it to the API")
 expectStrip("Press enter to continue", "enter", "Press enter to continue")
 expectStrip("No command here", "enter", "No command here")
 
+// Stop phrases
+check(StopPhrase.ends("stop listening"), "stop: plain")
+check(StopPhrase.ends("OK thanks, stop listening."), "stop: after other words")
+check(StopPhrase.ends("hang up"), "stop: hang up")
+check(StopPhrase.ends("great, end the call"), "stop: end the call")
+check(!StopPhrase.ends("hang up the laundry"), "stop: hang up mid-sentence")
+check(!StopPhrase.ends("stop listening to that podcast"), "stop: stop listening mid-sentence")
+check(!StopPhrase.ends("stop"), "stop: bare stop")
+
 if failures == 0 {
     print("matcher: all \(count) cases passed")
     exit(0)
