@@ -1,43 +1,45 @@
 import AppKit
 import ApplicationServices
 
-/// Which ChatGPT desktop app "Hey Chatty" opens.
-enum ChatGPTApp: String, CaseIterable {
-    /// "ChatGPT" — the current ChatGPT + Codex desktop app.
-    case unified
-    /// "ChatGPT Classic" — the older native ChatGPT app.
-    case classic
-
-    var bundleID: String { self == .unified ? "com.openai.codex" : "com.openai.chat" }
-    var menuTitle: String { self == .unified ? "ChatGPT (ChatGPT + Codex app)" : "ChatGPT Classic" }
-    var isInstalled: Bool { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil }
-}
-
 /// Opens an assistant straight into a new voice conversation.
 ///
-/// - ChatGPT (new app): bring it forward, ⌘N for a new chat, then ⌃⇧V — the app's own
-///   "start voice chat" shortcut.
-/// - ChatGPT Classic: the app's `chatgpt://new-voice-conversation` link.
-/// - Claude: `claude://claude.ai/new` opens a new chat, then the composer's "Use voice mode"
-///   button is pressed through Accessibility. (Older claude.ai builds left that button
-///   unlabeled; then it is the rightmost unlabeled button in the composer's bottom row.)
+/// - ChatGPT ("Hey Chatty"): ChatGPT Classic's `chatgpt://new-voice-conversation` link.
+/// - Codex ("Hey Codex"): the ChatGPT + Codex app — bring it forward, ⌘N for a new chat,
+///   then ⌃⇧V, the app's own "start voice chat" shortcut.
+/// - Claude ("Hey Claude"): `claude://claude.ai/new` opens a new chat, then the composer's
+///   "Use voice mode" button is pressed through Accessibility. (Older claude.ai builds left
+///   that button unlabeled; then it is the rightmost unlabeled button in the bottom row.)
+/// - Claude Code ("Hey Claude Code"): `claude://code/new` opens a new session in the desktop
+///   app's Code tab and ⌘D (Claude's "toggle dictation" shortcut) starts dictation. Claude
+///   Code has no conversational voice mode; `finishClaudeCodeDictation` sends the prompt.
 final class Launcher {
     static let claudeBundleID = "com.anthropic.claudefordesktop"
+    static let chatGPTClassicBundleID = "com.openai.chat"
+    static let codexBundleID = "com.openai.codex"
+
+    struct Result {
+        let message: String
+        /// Claude Code dictation is running; HeyVoice should wait for "send it".
+        var awaitingSend = false
+    }
 
     private let queue = DispatchQueue(label: "heyvoice.launcher")
 
     /// Runs off the main thread; `completion` gets a one-line result for the menu and log.
-    func open(_ target: WakeTarget, chatGPT: ChatGPTApp, completion: @escaping (String) -> Void) {
+    func open(_ target: WakeTarget, completion: @escaping (Result) -> Void) {
         queue.async {
-            let result: String
             switch target {
-            case .chatgpt:
-                result = chatGPT == .classic ? self.openChatGPTClassic() : self.openChatGPTUnified()
-            case .claude:
-                result = self.openClaudeVoice()
+            case .chatgpt: completion(Result(message: self.openChatGPTClassic()))
+            case .codex: completion(Result(message: self.openCodex()))
+            case .claude: completion(Result(message: self.openClaudeVoice()))
+            case .claudeCode: completion(self.openClaudeCodeDictation())
             }
-            completion(result)
         }
+    }
+
+    /// Stops Claude Code dictation, removes the spoken "send it", and sends the prompt.
+    func finishClaudeCodeDictation(completion: @escaping (String) -> Void) {
+        queue.async { completion(self.sendClaudeCodePrompt()) }
     }
 
     func dumpClaudeControls(completion: @escaping (String) -> Void) {
@@ -52,68 +54,74 @@ final class Launcher {
         }
     }
 
-    // MARK: ChatGPT
+    // MARK: ChatGPT and Codex
 
     private func openChatGPTClassic() -> String {
-        guard ChatGPTApp.classic.isInstalled else { return "ChatGPT Classic isn't installed" }
-        let url = URL(string: "chatgpt://new-voice-conversation")!
-        return Self.openURL(url) ? "ChatGPT Classic: started a new voice conversation"
-                                 : "ChatGPT Classic didn't accept the voice link"
+        let bundleID = Self.chatGPTClassicBundleID
+        guard Self.isInstalled(bundleID) else { return "ChatGPT Classic isn't installed" }
+        // A link sent to a cold-launching app can get dropped; start the app first.
+        if Self.running(bundleID) == nil {
+            Self.activate(bundleID)
+            _ = Self.waitUntilFrontmost(bundleID, timeout: 20)
+            Thread.sleep(forTimeInterval: 2)
+        }
+        let before = Self.classicVoiceSessionStamp()
+        guard Self.openURL(URL(string: "chatgpt://new-voice-conversation")!) else {
+            return "ChatGPT Classic didn't accept the voice link"
+        }
+        // ChatGPT Classic stamps this preference when a voice session starts.
+        for _ in 0..<20 {
+            Thread.sleep(forTimeInterval: 0.25)
+            if let now = Self.classicVoiceSessionStamp(), now != before {
+                return "ChatGPT: voice conversation started"
+            }
+        }
+        return "ChatGPT: opened the voice link (couldn't confirm voice started)"
     }
 
-    private func openChatGPTUnified() -> String {
-        let bundleID = ChatGPTApp.unified.bundleID
-        guard ChatGPTApp.unified.isInstalled else { return "ChatGPT isn't installed" }
+    private static func classicVoiceSessionStamp() -> Double? {
+        let app = chatGPTClassicBundleID as CFString
+        CFPreferencesAppSynchronize(app)
+        return CFPreferencesCopyAppValue("chatgpt_last_voice_session" as CFString, app) as? Double
+    }
+
+    private func openCodex() -> String {
+        let bundleID = Self.codexBundleID
+        guard Self.isInstalled(bundleID) else { return "The ChatGPT + Codex app isn't installed" }
         guard AXIsProcessTrusted() else {
-            _ = Self.activate(bundleID)
-            return "ChatGPT: opened, but HeyVoice needs Accessibility permission to start voice"
+            Self.activate(bundleID)
+            return "Codex: opened, but HeyVoice needs Accessibility permission to start voice"
         }
         let wasRunning = Self.running(bundleID) != nil
         guard Self.activate(bundleID),
               Self.waitUntilFrontmost(bundleID, timeout: wasRunning ? 8 : 25) else {
-            return "ChatGPT didn't come to the front"
+            return "Codex didn't come to the front"
         }
         // A cold-launched app needs a moment before its shortcuts are wired up.
         Thread.sleep(forTimeInterval: wasRunning ? 0.3 : 3)
 
-        guard Self.isFrontmost(bundleID) else { return "ChatGPT lost focus before voice could start" }
+        guard Self.isFrontmost(bundleID) else { return "Codex lost focus before voice could start" }
         Keys.press(Keys.n, flags: .maskCommand)
         Thread.sleep(forTimeInterval: 1.0)
-        guard Self.isFrontmost(bundleID) else { return "ChatGPT lost focus before voice could start" }
+        guard Self.isFrontmost(bundleID) else { return "Codex lost focus before voice could start" }
         Keys.press(Keys.v, flags: [.maskControl, .maskShift])
-        return "ChatGPT: new chat + voice shortcut sent"
+        return "Codex: new chat + voice shortcut sent"
     }
 
     // MARK: Claude
 
     private func openClaudeVoice() -> String {
-        guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.claudeBundleID) != nil else {
-            return "Claude isn't installed"
-        }
+        guard Self.isInstalled(Self.claudeBundleID) else { return "Claude isn't installed" }
         guard Self.openURL(URL(string: "claude://claude.ai/new")!) else { return "Claude didn't open a new chat" }
         guard AXIsProcessTrusted() else {
             return "Claude: opened a new chat, but HeyVoice needs Accessibility permission to start voice"
         }
-        guard let app = Self.waitUntilRunning(Self.claudeBundleID, timeout: 25) else {
-            return "Claude didn't start"
-        }
-        _ = Self.activate(Self.claudeBundleID)
-
-        let reader = AXReader(pid: app.processIdentifier)
-        Log.info("Claude: AXManualAccessibility → \(reader.enableWebAccessibility().rawValue)")
+        guard let reader = Self.claudeReader() else { return "Claude didn't start" }
 
         let start = Date()
-        let deadline = start.addingTimeInterval(20)
-        var enhanced = false
-        while Date() < deadline {
-            let elapsed = Date().timeIntervalSince(start)
-            // Some Chromium builds only expose page content to assistive apps that set this.
-            if !enhanced && elapsed > 3 {
-                enhanced = true
-                Log.info("Claude: AXEnhancedUserInterface → \(reader.enableEnhancedUserInterface().rawValue)")
-            }
+        while Date().timeIntervalSince(start) < 20 {
             // Until the page reports /new, the old page (and its buttons) may still be up.
-            let allowAnyClaudePage = elapsed > 8
+            let allowAnyClaudePage = Date().timeIntervalSince(start) > 8
             if let composer = reader.findComposer(requireNewChat: !allowAnyClaudePage),
                let button = composer.voiceButtonCandidates.first {
                 Log.info("Claude: pressing voice button at \(button.frame) (\(composer.voiceButtonCandidates.count) candidates)")
@@ -130,7 +138,116 @@ final class Launcher {
         return "Claude: opened a new chat but couldn't find the voice button"
     }
 
+    // MARK: Claude Code
+
+    private func openClaudeCodeDictation() -> Result {
+        guard Self.isInstalled(Self.claudeBundleID) else { return Result(message: "Claude isn't installed") }
+        guard Self.openURL(URL(string: "claude://code/new")!) else {
+            return Result(message: "Claude didn't open a new Code session")
+        }
+        guard AXIsProcessTrusted() else {
+            return Result(message: "Claude Code: opened a new session, but HeyVoice needs Accessibility permission to dictate")
+        }
+        guard let reader = Self.claudeReader() else { return Result(message: "Claude didn't start") }
+
+        let start = Date()
+        var found: CodeComposer?
+        while Date().timeIntervalSince(start) < 20 {
+            // A new session lives at /epitaxy; the previous session's page is /epitaxy/<id>.
+            let allowAnySession = Date().timeIntervalSince(start) > 8
+            if let composer = reader.findCodeComposer(requireNewSession: !allowAnySession) {
+                found = composer
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+        guard let composer = found else {
+            let lines = reader.describeControls()
+            Log.info("Claude Code: composer not found. Controls seen:\n" + lines.joined(separator: "\n"))
+            return Result(message: "Claude Code: opened a new session but couldn't find its dictation button")
+        }
+
+        guard Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 5) else {
+            return Result(message: "Claude Code: Claude didn't come to the front")
+        }
+        reader.focus(composer.textArea.element)
+        let idle = reader.micState(composer.micButton)
+        Log.info("Claude Code: mic button \(idle) before dictation")
+        if idle.isRecording { return Result(message: "Claude Code: dictating — say “send it” to send", awaitingSend: true) }
+
+        Keys.press(Keys.d, flags: .maskCommand)
+        if reader.waitForMic(composer.micButton, recording: true, baseline: idle, timeout: 2.5) {
+            return Result(message: "Claude Code: dictating — say “send it” to send", awaitingSend: true)
+        }
+        Log.info("Claude Code: ⌘D didn't start dictation; clicking the mic button")
+        Mouse.click(at: composer.micButton.frame.center)
+        if reader.waitForMic(composer.micButton, recording: true, baseline: idle, timeout: 2.5) {
+            return Result(message: "Claude Code: dictating — say “send it” to send", awaitingSend: true)
+        }
+        Log.info("Claude Code: mic button \(reader.micState(composer.micButton)) after both attempts")
+        return Result(message: "Claude Code: opened a new session but couldn't start dictation")
+    }
+
+    private func sendClaudeCodePrompt() -> String {
+        guard let reader = Self.claudeReader() else { return "Claude isn't running" }
+        Self.activate(Self.claudeBundleID)
+        guard Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 5) else {
+            return "Claude Code: Claude didn't come to the front to send"
+        }
+        guard let composer = reader.findCodeComposer(requireNewSession: false) else {
+            return "Claude Code: couldn't find the prompt box to send"
+        }
+
+        // Stop dictation. Clicking toggles it too, if the shortcut doesn't.
+        let state = reader.micState(composer.micButton)
+        if state.isRecording {
+            Keys.press(Keys.d, flags: .maskCommand)
+            if !reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 3) {
+                Mouse.click(at: composer.micButton.frame.center)
+                _ = reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 3)
+            }
+        }
+
+        // The last words land in the prompt a moment after dictation stops.
+        let text = reader.waitForStableText(composer.textArea.element, settle: 1.0, timeout: 6)
+        let trailing = SendPhrase.trailingLength(text)
+        let prompt = String(text.dropLast(trailing)).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return "Claude Code: nothing was dictated, so nothing was sent" }
+
+        reader.focus(composer.textArea.element)
+        if trailing > 0 {
+            Keys.press(Keys.downArrow, flags: .maskCommand) // caret to the end
+            for _ in 0..<trailing { Keys.press(Keys.delete, flags: []) }
+            Thread.sleep(forTimeInterval: 0.3)
+            let edited = reader.text(of: composer.textArea.element).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard edited == prompt else {
+                Log.info("Claude Code: expected prompt \(prompt.count) chars after trimming “send it”, found \(edited.count)")
+                return "Claude Code: couldn't remove “send it” cleanly, so the prompt wasn't sent"
+            }
+        }
+        Keys.press(Keys.returnKey, flags: [])
+        for _ in 0..<12 {
+            Thread.sleep(forTimeInterval: 0.25)
+            if reader.text(of: composer.textArea.element).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Claude Code: sent (\(prompt.count) characters)"
+            }
+        }
+        return "Claude Code: pressed Return (couldn't confirm the prompt was sent)"
+    }
+
+    private static func claudeReader() -> AXReader? {
+        guard let app = waitUntilRunning(claudeBundleID, timeout: 25) else { return nil }
+        activate(claudeBundleID)
+        let reader = AXReader(pid: app.processIdentifier)
+        reader.enableWebAccessibility()
+        return reader
+    }
+
     // MARK: App helpers
+
+    static func isInstalled(_ bundleID: String) -> Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+    }
 
     static func running(_ bundleID: String) -> NSRunningApplication? {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
@@ -205,8 +322,12 @@ final class Launcher {
 // MARK: - Keyboard
 
 enum Keys {
-    static let n: CGKeyCode = 45 // kVK_ANSI_N
-    static let v: CGKeyCode = 9  // kVK_ANSI_V
+    static let d: CGKeyCode = 2           // kVK_ANSI_D
+    static let n: CGKeyCode = 45          // kVK_ANSI_N
+    static let v: CGKeyCode = 9           // kVK_ANSI_V
+    static let returnKey: CGKeyCode = 36  // kVK_Return
+    static let delete: CGKeyCode = 51     // kVK_Delete (backspace)
+    static let downArrow: CGKeyCode = 125 // kVK_DownArrow
 
     /// Posts a key press to the frontmost app. Needs Accessibility permission.
     static func press(_ key: CGKeyCode, flags: CGEventFlags) {
@@ -218,6 +339,25 @@ enum Keys {
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
     }
+}
+
+enum Mouse {
+    /// Clicks at a screen point (top-left origin, as Accessibility reports frames), then
+    /// puts the pointer back.
+    static func click(at point: CGPoint) {
+        let original = CGEvent(source: nil)?.location
+        let source = CGEventSource(stateID: .hidSystemState)
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?
+                .post(tap: .cghidEventTap)
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if let original { CGWarpMouseCursorPosition(original) }
+    }
+}
+
+extension CGRect {
+    var center: CGPoint { CGPoint(x: midX, y: midY) }
 }
 
 // MARK: - Accessibility
@@ -243,6 +383,21 @@ struct ClaudeComposer {
     }
 }
 
+struct CodeComposer {
+    let textArea: AXControl
+    let micButton: AXControl
+}
+
+/// What the dictation mic button looks like right now. While recording, its pressed state
+/// flips and it widens to fit a waveform.
+struct MicState: CustomStringConvertible {
+    let pressed: Int?
+    let width: CGFloat
+
+    var isRecording: Bool { pressed == 1 }
+    var description: String { "pressed=\(pressed.map(String.init) ?? "n/a") width=\(Int(width))" }
+}
+
 final class AXReader {
     let app: AXUIElement
 
@@ -255,11 +410,6 @@ final class AXReader {
     @discardableResult
     func enableWebAccessibility() -> AXError {
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-    }
-
-    @discardableResult
-    func enableEnhancedUserInterface() -> AXError {
-        AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
     }
 
     func focusedWindow() -> AXUIElement? {
@@ -306,6 +456,80 @@ final class AXReader {
             return ClaudeComposer(textArea: textArea, webArea: webArea, voiceButtonCandidates: candidates)
         }
         return nil
+    }
+
+    /// The Claude Code prompt box and its dictation mic button ("Press and hold to record").
+    func findCodeComposer(requireNewSession: Bool) -> CodeComposer? {
+        var areas = webAreas()
+        if let focused = focusedWebArea() { areas.insert(focused, at: 0) }
+        for (webArea, url) in areas {
+            guard let components = URLComponents(string: url),
+                  components.host?.hasSuffix("claude.ai") == true,
+                  components.path.hasPrefix("/epitaxy") else { continue }
+            if requireNewSession && components.path != "/epitaxy" { continue }
+
+            let controls = collect(in: webArea, roles: ["AXTextArea", "AXCheckBox", "AXButton"])
+            guard let textArea = controls
+                .filter({ $0.role == "AXTextArea" && $0.frame.width > 250 })
+                .max(by: { $0.frame.width < $1.frame.width }) else { continue }
+            let ta = textArea.frame
+            let mic = controls.filter { c in
+                let label = c.label.lowercased()
+                return (label.contains("record") || label.contains("dictat") || label.contains("microphone"))
+                    && !label.contains("settings")
+                    && c.frame.midY > ta.minY - 10 && c.frame.midY < ta.maxY + 80
+            }.min { abs($0.frame.midX - ta.minX) < abs($1.frame.midX - ta.minX) }
+            guard let mic else { continue }
+            return CodeComposer(textArea: textArea, micButton: mic)
+        }
+        return nil
+    }
+
+    func micState(_ mic: AXControl) -> MicState {
+        let pressed = (copy(mic.element, kAXValueAttribute) as? NSNumber)?.intValue
+        return MicState(pressed: pressed, width: frame(mic.element)?.width ?? mic.frame.width)
+    }
+
+    /// Waits for dictation to start or stop. Uses the pressed state when the button reports
+    /// one, otherwise its width (wider while recording).
+    func waitForMic(_ mic: AXControl, recording: Bool, baseline: MicState, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let now = micState(mic)
+            if let pressed = now.pressed {
+                if (pressed == 1) == recording { return true }
+            } else if recording ? now.width > baseline.width + 4 : now.width < baseline.width - 4 {
+                return true
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        } while Date() < deadline
+        return false
+    }
+
+    func text(of element: AXUIElement) -> String {
+        string(element, kAXValueAttribute)
+    }
+
+    /// The text once it has stopped changing for `settle` seconds.
+    func waitForStableText(_ element: AXUIElement, settle: TimeInterval, timeout: TimeInterval) -> String {
+        let deadline = Date().addingTimeInterval(timeout)
+        var last = text(of: element)
+        var lastChange = Date()
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2)
+            let now = text(of: element)
+            if now != last {
+                last = now
+                lastChange = Date()
+            } else if Date().timeIntervalSince(lastChange) >= settle {
+                break
+            }
+        }
+        return last
+    }
+
+    func focus(_ element: AXUIElement) {
+        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
     }
 
     /// Once pressed, the button stops offering "Use voice mode" (it becomes Cancel / Stop

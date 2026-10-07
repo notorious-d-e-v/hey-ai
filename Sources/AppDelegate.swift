@@ -22,14 +22,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         set { defaults.set(newValue, forKey: "paused") }
     }
 
-    private var chatGPTApp: ChatGPTApp {
-        get {
-            if let raw = defaults.string(forKey: "chatgptApp"), let app = ChatGPTApp(rawValue: raw) { return app }
-            return ChatGPTApp.unified.isInstalled ? .unified : .classic
-        }
-        set { defaults.set(newValue.rawValue, forKey: "chatgptApp") }
-    }
-
     private var allowServerRecognition: Bool {
         get { defaults.bool(forKey: "allowServerRecognition") }
         set { defaults.set(newValue, forKey: "allowServerRecognition") }
@@ -38,7 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Lifecycle
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // heyvoice://open/chatgpt, heyvoice://open/claude, heyvoice://dump/claude
+        // heyvoice://open/<chatgpt|codex|claude|claude-code>, heyvoice://send/claude-code,
+        // heyvoice://dump/claude
         NSAppleEventManager.shared().setEventHandler(
             self, andSelector: #selector(handleURLEvent(_:reply:)),
             forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
@@ -58,6 +51,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listener.onWake = { [weak self] match, heard in
             Log.info("heard \"\(match.phrase)\" → \(match.target.displayName)")
             self?.trigger(match.target)
+        }
+        listener.onSendPhrase = { [weak self] in
+            Log.info("heard “send it”")
+            self?.sendClaudeCodePrompt()
+            self?.updateIcon()
+        }
+        listener.onSendWatchEnded = { [weak self] reason in
+            Log.info("Claude Code: \(reason)")
+            self?.lastAction = "Claude Code: \(reason)"
+            self?.updateIcon()
         }
 
         Log.info("HeyVoice started")
@@ -95,24 +98,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateIcon()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in self?.updateIcon() }
 
-        launcher.open(target, chatGPT: chatGPTApp) { [weak self] result in
-            Log.info(result)
+        launcher.open(target) { [weak self] result in
+            Log.info(result.message)
             DispatchQueue.main.async {
-                self?.lastAction = result
-                if result.contains("couldn't") || result.contains("didn't") || result.contains("needs") {
-                    NSSound(named: "Basso")?.play()
+                guard let self else { return }
+                self.report(result.message)
+                if result.awaitingSend {
+                    self.listener.watchForSend()
+                    self.updateIcon()
                 }
             }
+        }
+    }
+
+    private func sendClaudeCodePrompt() {
+        NSSound(named: "Pop")?.play()
+        launcher.finishClaudeCodeDictation { [weak self] result in
+            Log.info(result)
+            DispatchQueue.main.async { self?.report(result) }
+        }
+    }
+
+    private func report(_ result: String) {
+        lastAction = result
+        if result.contains("couldn't") || result.contains("didn't") || result.contains("needs")
+            || result.contains("wasn't") {
+            NSSound(named: "Basso")?.play()
         }
     }
 
     @objc private func handleURLEvent(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
         guard let string = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
               let url = URL(string: string) else { return }
-        let target = url.lastPathComponent.lowercased()
-        switch (url.host?.lowercased(), target) {
-        case ("open", "chatgpt"): trigger(.chatgpt)
-        case ("open", "claude"): trigger(.claude)
+        let name = url.lastPathComponent.lowercased()
+        switch (url.host?.lowercased(), name) {
+        case ("open", _) where WakeTarget(rawValue: name) != nil:
+            trigger(WakeTarget(rawValue: name)!)
+        case ("send", "claude-code"):
+            listener.cancelSendWatch()
+            sendClaudeCodePrompt()
         case ("dump", "claude"):
             launcher.dumpClaudeControls { result in
                 Log.info(result)
@@ -133,13 +157,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateIcon()
     }
 
-    @objc private func chooseChatGPTApp(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let app = ChatGPTApp(rawValue: raw) else { return }
-        chatGPTApp = app
+    @objc private func testTarget(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let target = WakeTarget(rawValue: raw) else { return }
+        trigger(target)
     }
 
-    @objc private func testChatGPT() { trigger(.chatgpt) }
-    @objc private func testClaude() { trigger(.claude) }
+    @objc private func sendNow() {
+        listener.cancelSendWatch()
+        sendClaudeCodePrompt()
+    }
+
+    @objc private func stopWaitingForSend() { listener.cancelSendWatch() }
 
     @objc private func dumpClaude() {
         launcher.dumpClaudeControls { result in
@@ -182,8 +210,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
 
         menu.addItem(info(statusLine))
-        menu.addItem(info("“Hey Chatty” → \(chatGPTApp == .classic ? "ChatGPT Classic" : "ChatGPT") voice"))
+        if listener.isWatchingForSend {
+            menu.addItem(info("Dictating to Claude Code — say “send it” to send"))
+            menu.addItem(item("Send Now", #selector(sendNow)))
+            menu.addItem(item("Stop Waiting for “Send It”", #selector(stopWaitingForSend)))
+        }
+        menu.addItem(info("“Hey Chatty” → ChatGPT voice"))
+        menu.addItem(info("“Hey Codex” → Codex voice"))
         menu.addItem(info("“Hey Claude” → Claude voice"))
+        menu.addItem(info("“Hey Claude Code” → Claude Code dictation"))
         if !lastHeard.isEmpty, case .listening = listenerState {
             menu.addItem(info("Heard: …\(String(lastHeard.suffix(48)))"))
         }
@@ -192,20 +227,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(item(paused ? "Resume Listening" : "Pause Listening", #selector(togglePause)))
 
-        let chatGPTMenu = NSMenu()
-        for app in ChatGPTApp.allCases where app.isInstalled {
-            let entry = item(app.menuTitle, #selector(chooseChatGPTApp(_:)))
-            entry.representedObject = app.rawValue
-            entry.state = app == chatGPTApp ? .on : .off
-            chatGPTMenu.addItem(entry)
-        }
-        let chatGPTItem = NSMenuItem(title: "“Hey Chatty” Opens", action: nil, keyEquivalent: "")
-        chatGPTItem.submenu = chatGPTMenu
-        menu.addItem(chatGPTItem)
-
         let testMenu = NSMenu()
-        testMenu.addItem(item("Open ChatGPT Voice Now", #selector(testChatGPT)))
-        testMenu.addItem(item("Open Claude Voice Now", #selector(testClaude)))
+        for target in WakeTarget.allCases {
+            let entry = item("Open \(target.displayName) Now", #selector(testTarget(_:)))
+            entry.representedObject = target.rawValue
+            testMenu.addItem(entry)
+        }
+        testMenu.addItem(.separator())
         testMenu.addItem(item("Write Claude Controls to Log", #selector(dumpClaude)))
         testMenu.addItem(item("Open Log", #selector(openLog)))
         let testItem = NSMenuItem(title: "Test", action: nil, keyEquivalent: "")
@@ -250,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateIcon() {
-        let symbol: String
+        var symbol: String
         if Date() < flashUntil {
             symbol = "waveform.circle.fill"
         } else if paused {
@@ -260,6 +288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             symbol = "waveform"
         }
+        if listener.isWatchingForSend && Date() >= flashUntil { symbol = "text.bubble" }
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "HeyVoice")
         image?.isTemplate = true
         statusItem?.button?.image = image
