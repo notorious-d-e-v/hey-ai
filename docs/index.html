@@ -18,6 +18,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Visit counts: GoatCounter, no cookies and nothing personal. Add ?ref=x / ?ref=hn to links you post to split by channel. -->
+<script data-goatcounter="https://heyai.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 <style>
   :root {
     --ink: #1B1A2E;
@@ -165,7 +167,7 @@
       <svg viewBox="20 -750 575 407" aria-hidden="true"><path fill="currentColor" d="M587 -750 475 -516 459 -610Q498 -610 528.5 -592.0Q559 -574 577.0 -543.5Q595 -513 595 -476Q595 -439 577.0 -409.0Q559 -379 528.0 -361.0Q497 -343 459 -343Q422 -343 391.0 -361.0Q360 -379 342.0 -409.5Q324 -440 324 -478Q324 -513 341.5 -552.5Q359 -592 401 -651L471 -750ZM283 -750 171 -516 155 -610Q194 -610 224.5 -592.0Q255 -574 273.0 -543.5Q291 -513 291 -476Q291 -439 273.0 -409.0Q255 -379 224.0 -361.0Q193 -343 155 -343Q118 -343 87.0 -361.0Q56 -379 38.0 -409.5Q20 -440 20 -478Q20 -513 37.5 -552.5Q55 -592 97 -651L167 -750Z"/></svg>
       <span style="font: 700 21px var(--display); letter-spacing: -0.01em;">Hey AI</span>
     </a>
-    <nav><a href="https://github.com/notorious-d-e-v/hey-ai">GitHub</a></nav>
+    <nav><a href="https://github.com/notorious-d-e-v/hey-ai" data-goatcounter-click="click-github-nav">GitHub</a></nav>
   </header>
 
   <main>
@@ -179,7 +181,7 @@
           <code id="cmd">curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/install.sh | bash</code>
           <button type="button" id="copy">Copy</button>
         </div>
-        <p class="fine">Paste it into Terminal. Needs macOS 14 or later and the <a href="https://claude.ai/download">Claude</a> and/or current <a href="https://openai.com/chatgpt/download/">ChatGPT</a> desktop app. <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/install.sh">Read the script</a> or <a href="https://github.com/notorious-d-e-v/hey-ai/releases/latest">download the app</a> yourself.</p>
+        <p class="fine">Paste it into Terminal. Needs macOS 14 or later and the <a href="https://claude.ai/download">Claude</a> and/or current <a href="https://openai.com/chatgpt/download/">ChatGPT</a> desktop app. <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/install.sh" data-goatcounter-click="click-read-script">Read the script</a> or <a href="https://github.com/notorious-d-e-v/hey-ai/releases/latest" data-goatcounter-click="click-download-app">download the app</a> yourself.</p>
       </div>
     </div>
 
@@ -237,7 +239,8 @@
   </main>
 
   <footer>
-    <p>Hey AI is free and open source under the MIT license. <a href="https://github.com/notorious-d-e-v/hey-ai">Source on GitHub</a>.</p>
+    <p>Hey AI is free and open source under the MIT license. <a href="https://github.com/notorious-d-e-v/hey-ai" data-goatcounter-click="click-github-footer">Source on GitHub</a>.</p>
+    <p>This site counts visits with <a href="https://www.goatcounter.com">GoatCounter</a>: no cookies, nothing personal. The app itself sends nothing.</p>
     <p>Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project.</p>
   </footer>
 </div>
@@ -284,6 +287,8 @@
       try { copied = document.execCommand("copy"); } catch {}
     }
     copy.textContent = copied ? "Copied" : "Press ⌘C";
+    // The step between visiting and installing.
+    window.goatcounter?.count?.({ path: "install-copied", title: "Copied the install command", event: true });
     setTimeout(() => (copy.textContent = "Copy"), 1800);
   });
 </script>

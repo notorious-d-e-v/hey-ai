@@ -101,6 +101,27 @@ Spend the first 30–60 minutes replying. Good replies to seed: which wake word 
 - **Description:** A free Mac menu-bar app. Say an assistant's name (Claude, ChatGPT, Codex or Claude Code) and it opens with voice already on. Speech is recognized on your Mac, nothing is recorded, and setup is one window.
 - **Gallery:** the demo video, the light banner, the setup window ([`tools/snapshot.sh`](../tools/snapshot.sh) renders it), the brand sheet.
 
+## Measuring the launch
+
+Two sources, neither of which touches the app (it sends nothing):
+
+- **GitHub**: installs (downloads of `Hey-AI.zip`, one per `curl … | bash`), stars, issues, repo visitors and referrers. GitHub keeps traffic for only 14 days, so `scripts/stats.py` saves a snapshot every morning to `~/workspace/hey-ai-stats` (`scripts/install-stats-job.sh` installs the daily job). Run `python3 scripts/stats.py --report` for the summary.
+- **The site**: [GoatCounter](https://heyai.goatcounter.com) counts visits, referrers and three events with no cookies: `install-copied` (the Copy button), `click-download-app` and `click-read-script`.
+
+Link with a channel tag so the site can split visitors by where they came from:
+
+| Where | Link |
+| --- | --- |
+| X | `https://notorious-d-e-v.github.io/hey-ai/?ref=x` |
+| Show HN | `https://github.com/notorious-d-e-v/hey-ai` (HN prefers the repo; GitHub shows it as news.ycombinator.com) |
+| Product Hunt | `https://notorious-d-e-v.github.io/hey-ai/?ref=producthunt` |
+| Anywhere else | `?ref=<name>` on the site link |
+
+What to watch:
+
+- **Launch week, daily:** installs against unique visitors (site plus repo), Copy clicks against site visitors, referrers by channel, stars, and any issue about setup or a wake phrase not working. The app has no telemetry, so issues are the only window into whether first runs succeed.
+- **After launch, weekly:** new installs per week once the spike fades, stars per week, new issues per 100 installs (bugs vs feature requests), which wake words people ask for, and how many existing users download each new release.
+
 ## Before launch checklist
 
 - [ ] Repo is public at `github.com/notorious-d-e-v/hey-ai` with the About text, topics and social preview set.
@@ -108,4 +129,5 @@ Spend the first 30–60 minutes replying. Good replies to seed: which wake word 
 - [ ] The install line works on a Mac that has never had Hey AI.
 - [ ] GitHub Pages is on (Settings → Pages → `main` / `docs`) and the site loads.
 - [ ] Demo video recorded and embedded in the README.
+- [ ] GoatCounter account created with the site code `heyai` (the site already sends to heyai.goatcounter.com).
 - [ ] Optional: a short domain (for example `heyai.sh`) pointing at the install script, so the command becomes `curl -fsSL heyai.sh | bash`.
