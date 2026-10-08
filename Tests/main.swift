@@ -178,6 +178,25 @@ rewrite("Hey Claude", "Hey Claude code", nil)
 rewrite("what a nice day", "Claude", nil)  // no greeting before
 rewrite("hey there friend", "Claude", nil) // greeting too far back
 
+// A run of partial transcripts from one recognition task, as the listener sees them
+func partials(_ texts: [String], _ expected: WakeTarget?, mayContinue: Bool = false) {
+    var carry = GreetingCarry()
+    var previous = "", got: WakeMatch?
+    for text in texts {
+        got = WakeMatcher.match(text) ?? carry.match(previous: previous, current: text)
+        previous = text
+    }
+    check(got?.target == expected && (got?.mayContinue ?? false) == mayContinue,
+          "partials \(texts) → \(got?.target.rawValue ?? "nothing")\(got?.mayContinue == true ? " (may continue)" : ""), expected \(expected?.rawValue ?? "nothing")")
+}
+partials(["Hey", "Claude"], .claude, mayContinue: true)
+partials(["Hey", "Claude", "Claude code"], .claudeCode)
+partials(["Hey", "Claude", "Claude Code"], .claudeCode)
+partials(["Hey Chad", "Chatty"], .chatgpt)
+partials(["Hey", "Claude", "Claude is"], .claude)
+partials(["Hey Claude", "Hey Claude code"], .claudeCode)
+partials(["so", "Claude", "Claude code"], nil)
+
 // What the menu shows for a result
 func menu(_ result: String, _ expected: String) {
     check(MenuText.forResult(result) == expected, "menu: \"\(result)\" → \"\(MenuText.forResult(result))\", expected \"\(expected)\"")

@@ -90,13 +90,15 @@ enum WakeMatcher {
     /// The recognizer sometimes shows "Hey", then rewrites its transcript as just "Claude"
     /// and only offers "Hey Claude" again a couple of seconds later. When the last
     /// transcript ended in a greeting (or a greeting and one more word, as in "Hey Chad")
-    /// and the new one replaces it rather than adding to it, match as if the greeting were
-    /// still in front.
-    static func matchAfterRewrite(previous: String, current: String) -> WakeMatch? {
+    /// and the new one replaces it rather than adding to it, this is the greeting it lost.
+    static func droppedGreeting(previous: String, current: String) -> String? {
         let before = normalize(previous), now = normalize(current)
-        guard let first = now.first, !greetings.contains(first), !now.starts(with: before),
-              let greeting = before.suffix(2).last(where: { greetings.contains($0) }) else { return nil }
-        return match(([greeting] + now).joined(separator: " "))
+        guard let first = now.first, !greetings.contains(first), !now.starts(with: before) else { return nil }
+        return before.suffix(2).last(where: { greetings.contains($0) })
+    }
+
+    static func matchAfterRewrite(previous: String, current: String) -> WakeMatch? {
+        droppedGreeting(previous: previous, current: current).flatMap { match("\($0) \(current)") }
     }
 
     static func isChatty(_ word: String) -> Bool {
@@ -233,5 +235,20 @@ enum StopPhrase {
     /// prompt that happens to end "…then hang up" doesn't stop it.
     static func isWhole(_ utterance: [String]) -> Bool {
         phrases.contains(utterance)
+    }
+}
+
+/// Catches a wake phrase whose greeting the recognizer rewrote away ("Hey" → "Claude"),
+/// and keeps that greeting for the rest of the phrase, so "Claude" growing into "Claude
+/// code" still reads as "hey claude code". One per recognition task.
+struct GreetingCarry {
+    private(set) var greeting: String?
+
+    mutating func match(previous: String, current: String) -> WakeMatch? {
+        if let greeting, let carried = WakeMatcher.match("\(greeting) \(current)") { return carried }
+        guard let dropped = WakeMatcher.droppedGreeting(previous: previous, current: current),
+              let match = WakeMatcher.match("\(dropped) \(current)") else { return nil }
+        greeting = dropped
+        return match
     }
 }

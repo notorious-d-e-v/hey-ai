@@ -54,6 +54,7 @@ final class WakeListener {
     private var lastHeardText = ""
     /// The transcript before `lastHeardText`, for spotting a rewrite that dropped "hey".
     private var previousHeardText = ""
+    private var greetingCarry = GreetingCarry()
     /// Bumped whenever the transcript changes; unlike lastHeardText it survives a new
     /// recognition task, so "nothing new was said" checks aren't fooled by a restart.
     private var heardChanges = 0
@@ -102,6 +103,9 @@ final class WakeListener {
         if nudgeVisible { onNudge?(false) }
         nudgeVisible = false
         nudgedAt = nil
+        // The task was primed for "yes" and "send it"; start one primed for the wake
+        // phrases again, or a made-up name like "Chatty" is heard as "Chad" until it rotates.
+        if isRunning { startTask() }
     }
 
     private func endSendWatch(_ reason: String) {
@@ -221,6 +225,7 @@ final class WakeListener {
         let gen = generation
         lastHeardText = ""
         previousHeardText = ""
+        greetingCarry = GreetingCarry()
         utteranceStart = 0
 
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -382,7 +387,6 @@ final class WakeListener {
             guard let self, self.isWatchingForSend else { return }
             self.stopWatchingForSend()
             self.onSendPhrase?(command)
-            self.startTask()
         }
         if isFinal { send(); return true }
         let changes = heardChanges
@@ -400,6 +404,6 @@ final class WakeListener {
         for transcription in result.transcriptions.prefix(4) {
             if let match = WakeMatcher.match(transcription.formattedString) { return match }
         }
-        return WakeMatcher.matchAfterRewrite(previous: previousHeardText, current: result.bestTranscription.formattedString)
+        return greetingCarry.match(previous: previousHeardText, current: result.bestTranscription.formattedString)
     }
 }
