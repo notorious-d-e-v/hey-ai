@@ -4,7 +4,7 @@ Branch `spike/simplify-wake-words`. Research, measurements and a live-tested pro
 
 **Owner decisions (10-08):**
 
-1. Turn the hotkey on automatically. Use the hotkey you set if there is one; otherwise set it up and ask to restart ChatGPT, and if you don't restart, say it kicks in at the next restart.
+1. Turn the hotkey on automatically. Use the hotkey you set if there is one; otherwise set it up and ask to restart ChatGPT, and if you don't restart, say it kicks in at the next restart. A hotkey removed in ChatGPT's settings is set again ("if they've installed Hey AI, they want this turned on").
 2. "Hey Chatty" doesn't need to bring ChatGPT forward.
 3. Keep "Hey Codex" as an alias.
 4. Live-test the prototype, then open a draft PR.
@@ -147,8 +147,8 @@ Stop ("stop listening", ChatGPT is the target):
 
 - **Turning it on** (at every launch, until it's done):
   - You set one in ChatGPT: Hey AI uses it. If it's a key Hey AI can't press (a function key, or a modifier on its own), Hey AI uses ⌃⇧V and logs why.
-  - You removed it in ChatGPT's settings, or the file isn't one Hey AI can read: it's left alone, and Hey AI uses ⌃⇧V.
-  - Otherwise Hey AI adds ⌃⌥⌘V, merging into any existing file. If ChatGPT is running, Hey AI asks to restart it: as a row in the setup window on first run, or as a one-time alert ("Restart ChatGPT" / "Later"). After Later, the menu says the hotkey kicks in the next time ChatGPT restarts. If ChatGPT isn't running, it picks the hotkey up when it opens.
+  - The file isn't one Hey AI can read: it's left alone, and Hey AI uses ⌃⇧V.
+  - Otherwise Hey AI adds ⌃⌥⌘V, merging into any existing file. That includes a hotkey you removed in ChatGPT's settings, which ChatGPT records as a null key; Hey AI sets it again. If ChatGPT is running, Hey AI asks to restart it: as a row in the setup window on first run, or as a one-time alert ("Restart ChatGPT" / "Later"). After Later, the menu says the hotkey kicks in the next time ChatGPT restarts. If ChatGPT isn't running, it picks the hotkey up when it opens.
 - **When it's live**: a binding exists, and either you set it in ChatGPT or ChatGPT launched after Hey AI wrote it. Until then Hey AI uses the ⌃⇧V fallback.
 - **Restart ChatGPT**: Hey AI quits ChatGPT, which may ask you to confirm, waits up to 30 s for it to exit, then opens it again. The alert warns that this ends anything ChatGPT is in the middle of.
 - **Fallback when the hotkey isn't live**: today's ⌃⇧V path, trimmed. It brings ChatGPT forward, presses ⌃⇧V, waits up to 2 s for the mic, uses the same pending-start guard, and waits until 4 s after the start before a ⌃⇧V stop. There's no background watcher, no stop-once-started and no restart gap.
@@ -217,7 +217,7 @@ Status after the owner's go-ahead on 10-08: steps 1–4 are done on this branch 
 
 ## 7. Prototype on this branch
 
-Three commits after this doc. `./build.sh` runs 166 test cases (21 new, for the keybindings file and shortcut parsing).
+The commits after this doc. `./build.sh` runs 167 test cases (22 new, for the keybindings file and shortcut parsing).
 
 | | Before (1.0.14) | Prototype |
 | --- | --- | --- |
@@ -250,7 +250,7 @@ The prototype build ran in place of 1.0.14, in dry run so it ignored real wake w
 | ChatGPT's desktop log during all of the above | 0 "already starting", 0 "interrupted" |
 | "Hey Claude" ×3 | 3 of 3. One needed the second press, which now came after 1.09 s; voice started 2.1 s after the request (about 3.4 s before) |
 | "Hey Claude Code" ×2, then "stop listening" | 2 of 2 dictating; 2 of 2 stopped |
-| Hotkey setup against a scratch keybindings file | None → added ⌃⌥⌘V and showed the alert (Later chosen, logged). Cleared, yours, yours-but-unpressable and unreadable all behaved as designed and left the file alone |
+| Hotkey setup against a scratch keybindings file | None → added ⌃⌥⌘V and showed the alert (Later chosen, logged). Removed in ChatGPT's settings → set again to ⌃⌥⌘V, other bindings kept, alert shown. Yours, yours-but-unpressable and unreadable all behaved as designed and left the file alone |
 | Setup-window row | Shows "Hey AI turned on ChatGPT's voice hotkey (⌃⌥⌘V)…" with a "Restart ChatGPT now" link |
 | Quit and reopen (on Apple's Chess, not ChatGPT) | Quit and reopened with a new process in about 1.3 s |
 
