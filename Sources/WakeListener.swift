@@ -85,7 +85,7 @@ final class WakeListener {
         nudgedAt = nil
         nudgeVisible = false
         sendWatchTimer?.invalidate()
-        sendWatchTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        sendWatchTimer = Self.timer(0.5, repeats: true) { [weak self] _ in
             self?.checkSendWatch()
         }
         startTask()
@@ -239,7 +239,7 @@ final class WakeListener {
             DispatchQueue.main.async { self?.handle(result: result, error: error, generation: gen) }
         }
         rotateTimer?.invalidate()
-        rotateTimer = Timer.scheduledTimer(withTimeInterval: Self.rotateInterval, repeats: false) { [weak self] _ in
+        rotateTimer = Self.timer(Self.rotateInterval, repeats: false) { [weak self] _ in
             self?.startTask()
         }
     }
@@ -298,6 +298,15 @@ final class WakeListener {
         }
     }
 
+    /// A main-thread timer that also runs while a menu is open. `scheduledTimer` only runs
+    /// in the default mode, which pauses while the Hey AI menu is tracking, so "Hey Claude"
+    /// and the Done? bubble used to wait until the menu closed.
+    private static func timer(_ interval: TimeInterval, repeats: Bool, block: @escaping (Timer) -> Void) -> Timer {
+        let timer = Timer(timeInterval: interval, repeats: repeats, block: block)
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
+    }
+
     private func fire(_ match: WakeMatch, text: String) {
         pendingTimer?.invalidate()
         pendingMatch = nil
@@ -313,7 +322,7 @@ final class WakeListener {
         if let pending = pendingMatch, pending.text == text { return }
         pendingMatch = (match, text)
         pendingTimer?.invalidate()
-        pendingTimer = Timer.scheduledTimer(withTimeInterval: Self.continuationWait, repeats: false) { [weak self] _ in
+        pendingTimer = Self.timer(Self.continuationWait, repeats: false) { [weak self] _ in
             guard let self, let pending = self.pendingMatch else { return }
             self.fire(pending.match, text: pending.text)
         }
@@ -339,7 +348,7 @@ final class WakeListener {
         }
         if isFinal { stop(); return true }
         let changes = heardChanges
-        stopTimer = Timer.scheduledTimer(withTimeInterval: Self.stopSettle, repeats: false) { [weak self] _ in
+        stopTimer = Self.timer(Self.stopSettle, repeats: false) { [weak self] _ in
             guard let self, self.heardChanges == changes else { return }
             stop()
         }
@@ -373,7 +382,7 @@ final class WakeListener {
         }
         if isFinal { send(); return true }
         let changes = heardChanges
-        sendTimer = Timer.scheduledTimer(withTimeInterval: Self.sendSettle, repeats: false) { [weak self] _ in
+        sendTimer = Self.timer(Self.sendSettle, repeats: false) { [weak self] _ in
             guard let self, self.heardChanges == changes else { return }
             send()
         }

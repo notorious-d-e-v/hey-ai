@@ -1,4 +1,4 @@
-**New in 1.0.7:** in Claude Code, saying “yes” when the *Done?* bubble asks now really sends your prompt. After a pause, macOS sometimes starts its transcript over with just your reply, and Hey AI missed it.
+**New in 1.0.8:** “Hey Claude” and the *Done?* bubble no longer wait for you to close the Hey AI menu, and the menu says what happened in plain words (“Opened ChatGPT voice”, “Sent your prompt to Claude Code”).
 
 Say an assistant's name and it opens, ready to talk.
 
