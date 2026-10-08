@@ -197,6 +197,25 @@ partials(["Hey", "Claude", "Claude is"], .claude)
 partials(["Hey Claude", "Hey Claude code"], .claudeCode)
 partials(["so", "Claude", "Claude code"], nil)
 
+// Waiting for "code" after "hey claude"
+let t0 = Date()
+func hold(_ now: Double, changed: Double, spoke: Double, _ expected: Bool, _ name: String) {
+    let got = ContinuationHold.keepWaiting(now: t0.addingTimeInterval(now), heldSince: t0,
+                                           changedAt: t0.addingTimeInterval(changed), lastSpeechAt: t0.addingTimeInterval(spoke))
+    check(got == expected, "hold: \(name) → \(got ? "wait" : "fire"), expected \(expected ? "wait" : "fire")")
+}
+hold(0.5, changed: 0, spoke: -0.1, false, "silence after hey claude")
+hold(0.5, changed: 0, spoke: 0.1, false, "tail of claude right after the transcript")
+hold(0.5, changed: 0, spoke: 0.4, true, "still talking: code on its way")
+hold(1.6, changed: 0, spoke: 1.5, false, "never past the limit")
+hold(0.9, changed: 0.6, spoke: 0.7, false, "transcript caught up with the speech")
+hold(1.2, changed: 0, spoke: 0.4, false, "quiet long enough: nothing more is coming")
+var activity = SpeechActivity()
+_ = activity.isSpeech(level: -55)
+check(!activity.isSpeech(level: -52), "speech: room noise isn't speech")
+check(activity.isSpeech(level: -30), "speech: talking is")
+check(!activity.isSpeech(level: -56), "speech: back to quiet")
+
 // What the menu shows for a result
 func menu(_ result: String, _ expected: String) {
     check(MenuText.forResult(result) == expected, "menu: \"\(result)\" → \"\(MenuText.forResult(result))\", expected \"\(expected)\"")

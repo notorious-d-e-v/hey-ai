@@ -47,6 +47,13 @@ final class WakeListener {
     /// "hey claude" heard as the last words, held briefly in case "code" follows.
     private var pendingMatch: (match: WakeMatch, text: String)?
     private var pendingTimer: Timer?
+    /// When the current "hey claude" hold began, and when its transcript last changed.
+    private var heldSince = Date.distantPast
+    private var pendingChangedAt = Date.distantPast
+    /// When the microphone last heard speech (written on the audio thread, under `levelLock`).
+    private let levelLock = NSLock()
+    private var speech = SpeechActivity()
+    private var lastSpeechAt = Date.distantPast
 
     private(set) var isWatchingForSend = false
     private var sendWatchStarted = Date.distantPast
@@ -70,7 +77,6 @@ final class WakeListener {
 
     private static let rotateInterval: TimeInterval = 50
     private static let cooldown: TimeInterval = 3
-    private static let continuationWait: TimeInterval = 0.5
     /// Quiet after a send command before it counts, so "send it to the API…" doesn't fire.
     private static let sendSettle: TimeInterval = 1.0
     /// Quiet after a stop phrase before it counts (short: stopping should feel immediate).
@@ -196,9 +202,21 @@ final class WakeListener {
             self.requestLock.lock()
             self.request?.append(buffer)
             self.requestLock.unlock()
+            self.noteLevel(of: buffer)
         }
         engine.prepare()
         try engine.start()
+    }
+
+    /// Audio thread. Only the loudness is kept, as the time speech was last heard.
+    private func noteLevel(of buffer: AVAudioPCMBuffer) {
+        guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
+        var sum: Float = 0
+        for i in 0..<Int(buffer.frameLength) { sum += samples[i] * samples[i] }
+        let level = 10 * log10(max(sum / Float(buffer.frameLength), 1e-10))
+        levelLock.lock()
+        if speech.isSpeech(level: level) { lastSpeechAt = Date() }
+        levelLock.unlock()
     }
 
     /// Input device changed (headphones plugged in, another app reconfigured audio, …).
@@ -329,10 +347,29 @@ final class WakeListener {
     /// deliver "code" well after "claude").
     private func holdForContinuation(_ match: WakeMatch, text: String) {
         if let pending = pendingMatch, pending.text == text { return }
+        if pendingMatch == nil { heldSince = Date() }
         pendingMatch = (match, text)
+        pendingChangedAt = Date()
+        checkPending(after: ContinuationHold.wait)
+    }
+
+    /// Fires the held "hey claude" unless the mic says more words are still coming.
+    private func checkPending(after delay: TimeInterval) {
         pendingTimer?.invalidate()
-        pendingTimer = Self.timer(Self.continuationWait, repeats: false) { [weak self] _ in
+        pendingTimer = Self.timer(delay, repeats: false) { [weak self] _ in
             guard let self, let pending = self.pendingMatch else { return }
+            self.levelLock.lock()
+            let spoke = self.lastSpeechAt
+            self.levelLock.unlock()
+            if ContinuationHold.keepWaiting(now: Date(), heldSince: self.heldSince,
+                                            changedAt: self.pendingChangedAt, lastSpeechAt: spoke) {
+                self.checkPending(after: 0.1)
+                return
+            }
+            let held = Date().timeIntervalSince(self.heldSince)
+            if held > ContinuationHold.wait + 0.2 {
+                Log.info("waited \(String(format: "%.1f", held)) s for more after “\(pending.match.phrase)” (still talking)")
+            }
             self.fire(pending.match, text: pending.text)
         }
     }
