@@ -159,6 +159,25 @@ check(StopPhrase.isWhole(words("stop listening")), "stop whole: alone")
 check(StopPhrase.isWhole(words("hang up")), "stop whole: hang up alone")
 check(!StopPhrase.isWhole(words("and then hang up")), "stop whole: end of a sentence")
 
+// The recognizer rewrote "Hey" (or "Hey Chad") into a transcript without the greeting
+func rewrite(_ previous: String, _ current: String, _ expected: WakeTarget?, mayContinue: Bool = false) {
+    let got = WakeMatcher.matchAfterRewrite(previous: previous, current: current)
+    check(got?.target == expected && (got?.mayContinue ?? false) == mayContinue,
+          "rewrite \"\(previous)\" → \"\(current)\": got \(got?.target.rawValue ?? "nothing"), expected \(expected?.rawValue ?? "nothing")")
+}
+rewrite("Hey", "Claude", .claude, mayContinue: true)
+rewrite("Hey", "Claude code", .claudeCode)
+rewrite("Hey Chad", "Chatty", .chatgpt)
+rewrite("Hey", "Chatty Chad", .chatgpt)
+rewrite("Hey", "Codex", .codex)
+rewrite("Hello", "Claude", nil)
+rewrite("", "Claude", nil)
+rewrite("Hey", "Hey Claude", nil)          // has its own greeting; the normal match handles it
+rewrite("I told her hey", "nothing", nil)
+rewrite("Hey Claude", "Hey Claude code", nil)
+rewrite("what a nice day", "Claude", nil)  // no greeting before
+rewrite("hey there friend", "Claude", nil) // greeting too far back
+
 // What the menu shows for a result
 func menu(_ result: String, _ expected: String) {
     check(MenuText.forResult(result) == expected, "menu: \"\(result)\" → \"\(MenuText.forResult(result))\", expected \"\(expected)\"")
@@ -171,6 +190,9 @@ menu("ChatGPT: stopped listening", "Ended the ChatGPT voice chat")
 menu("Claude: stopped listening", "Ended the Claude voice chat")
 menu("Claude Code: stopped listening", "Stopped dictating to Claude Code. Nothing was sent.")
 menu("Claude isn't installed", "Claude isn't installed")
+menu("ChatGPT: already in a voice chat", "ChatGPT is already in a voice chat")
+menu("ChatGPT: voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT.",
+     "ChatGPT's voice chat didn't start. If it says it's already starting, quit and reopen ChatGPT.")
 
 if failures == 0 {
     print("matcher: all \(count) cases passed")

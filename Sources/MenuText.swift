@@ -9,6 +9,10 @@ enum MenuText {
             return "Opened \(name) voice"
         }
         switch result {
+        case _ where result.hasSuffix("quit and reopen ChatGPT."):
+            return "ChatGPT's voice chat didn't start. If it says it's already starting, quit and reopen ChatGPT."
+        case _ where result.hasSuffix(": already in a voice chat"):
+            return "\(result.prefix { $0 != ":" }) is already in a voice chat"
         case _ where result.hasPrefix("Claude: voice mode started"): return "Opened Claude voice"
         case _ where result.hasPrefix("Claude: pressed the voice button"): return "Opened Claude and pressed its voice button"
         case _ where result.hasPrefix("Claude Code: dictating"): return "Dictating to Claude Code"

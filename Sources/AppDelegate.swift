@@ -22,6 +22,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var listenerState: WakeListener.State = .stopped
     private var lastAction = "" { didSet { lastActionAt = Date() } }
     private var lastActionAt = Date.distantPast
+    /// ChatGPT voice chats Hey AI has asked for that haven't finished starting.
+    private var chatgptStarts = 0
+    private var chatgptStarting: Bool { chatgptStarts > 0 }
     private var flashUntil = Date.distantPast
 
     private let defaults = UserDefaults.standard
@@ -286,10 +289,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateIcon()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in self?.updateIcon() }
 
+        let startsChatGPTVoice = target == .chatgpt || target == .codex
+        if startsChatGPTVoice { chatgptStarts += 1 }
         launcher.open(target) { [weak self] result in
             Log.info(result.message)
             DispatchQueue.main.async {
                 guard let self else { return }
+                if startsChatGPTVoice { self.chatgptStarts -= 1 }
                 self.report(result.message)
                 if result.awaitingSend {
                     self.nudgeAnchor = result.anchor
@@ -343,7 +349,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return
         }
-        guard let assistant = MicActivity.assistantListening() else { return }
+        guard let assistant = MicActivity.assistantListening() else {
+            // A ChatGPT voice chat Hey AI is still starting doesn't have the mic yet.
+            guard chatgptStarting else { return }
+            Log.info("heard “stop listening” while ChatGPT voice is starting → stop it once it starts")
+            launcher.endChatGPTVoiceOnceStarted { [weak self] result in
+                guard let result else { return }
+                Log.info(result)
+                DispatchQueue.main.async { self?.report(result) }
+            }
+            return
+        }
         Log.info("heard “stop listening” → stop \(assistant.rawValue)\(Session.isScreenLocked ? " (screen locked)" : "")")
         launcher.endVoice(assistant) { [weak self] result in
             Log.info(result)
@@ -556,7 +572,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func stopListeningNow() {
-        guard listener.isWatchingForSend || MicActivity.assistantListening() != nil else {
+        guard listener.isWatchingForSend || chatgptStarting || MicActivity.assistantListening() != nil else {
             lastAction = "Nothing was listening, so there was nothing to stop"
             return
         }

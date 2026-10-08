@@ -52,6 +52,8 @@ final class WakeListener {
     private var sendWatchStarted = Date.distantPast
     private var lastHeardChange = Date.distantPast
     private var lastHeardText = ""
+    /// The transcript before `lastHeardText`, for spotting a rewrite that dropped "hey".
+    private var previousHeardText = ""
     /// Bumped whenever the transcript changes; unlike lastHeardText it survives a new
     /// recognition task, so "nothing new was said" checks aren't fooled by a restart.
     private var heardChanges = 0
@@ -218,6 +220,7 @@ final class WakeListener {
         generation += 1
         let gen = generation
         lastHeardText = ""
+        previousHeardText = ""
         utteranceStart = 0
 
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -264,6 +267,7 @@ final class WakeListener {
                     utteranceStart = start
                     utteranceStartedAt = Date()
                 }
+                previousHeardText = lastHeardText
                 lastHeardText = text
                 lastHeardChange = Date()
                 heardChanges += 1
@@ -396,6 +400,6 @@ final class WakeListener {
         for transcription in result.transcriptions.prefix(4) {
             if let match = WakeMatcher.match(transcription.formattedString) { return match }
         }
-        return nil
+        return WakeMatcher.matchAfterRewrite(previous: previousHeardText, current: result.bestTranscription.formattedString)
     }
 }

@@ -87,6 +87,18 @@ enum WakeMatcher {
         return nil
     }
 
+    /// The recognizer sometimes shows "Hey", then rewrites its transcript as just "Claude"
+    /// and only offers "Hey Claude" again a couple of seconds later. When the last
+    /// transcript ended in a greeting (or a greeting and one more word, as in "Hey Chad")
+    /// and the new one replaces it rather than adding to it, match as if the greeting were
+    /// still in front.
+    static func matchAfterRewrite(previous: String, current: String) -> WakeMatch? {
+        let before = normalize(previous), now = normalize(current)
+        guard let first = now.first, !greetings.contains(first), !now.starts(with: before),
+              let greeting = before.suffix(2).last(where: { greetings.contains($0) }) else { return nil }
+        return match(([greeting] + now).joined(separator: " "))
+    }
+
     static func isChatty(_ word: String) -> Bool {
         if chattyWords.contains(word) { return true }
         return word.count >= 4 && (word.hasPrefix("ch") || word.hasPrefix("sh"))

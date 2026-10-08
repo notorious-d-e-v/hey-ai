@@ -32,6 +32,8 @@ final class Launcher {
     /// The Claude Code session whose dictation Hey AI started (launcher queue only).
     private var codeSession: (reader: AXReader, composer: CodeComposer)?
     private var dictationTimer: DispatchSourceTimer?
+    /// When Hey AI last stopped a ChatGPT voice chat. Only touched on `queue`.
+    private var chatgptStoppedAt = Date.distantPast
 
     /// Runs off the main thread; `completion` gets a one-line result for the menu and log.
     func open(_ target: WakeTarget, completion: @escaping (Result) -> Void) {
@@ -96,6 +98,14 @@ final class Launcher {
         queue.async { completion(self.endVoiceNow(assistant)) }
     }
 
+    /// Ends a ChatGPT voice chat that's still starting. This waits behind the start (the
+    /// queue runs one thing at a time) and stops the chat only if it came up.
+    func endChatGPTVoiceOnceStarted(completion: @escaping (String?) -> Void) {
+        queue.async {
+            completion(MicActivity.assistantListening() == .chatgpt ? self.endVoiceNow(.chatgpt) : nil)
+        }
+    }
+
     /// Stops the Claude Code dictation Hey AI started, without sending.
     func stopClaudeCodeDictation(completion: @escaping (String) -> Void) {
         queue.async {
@@ -141,6 +151,16 @@ final class Launcher {
             Self.activate(bundleID)
             return "\(name): opened, but Hey AI needs Accessibility permission to start voice"
         }
+        // One voice chat at a time. ChatGPT holds a lock while a voice chat starts, and
+        // asking for another before it lets go fails with "Voice chat is already starting".
+        if MicActivity.assistantListening() == .chatgpt {
+            Self.activate(bundleID)
+            return "\(name): already in a voice chat"
+        }
+        // A chat that was just stopped takes a moment to wind down inside ChatGPT.
+        let sinceStop = Date().timeIntervalSince(chatgptStoppedAt)
+        if sinceStop < Self.chatgptRestartGap { Thread.sleep(forTimeInterval: Self.chatgptRestartGap - sinceStop) }
+
         let wasRunning = Self.running(bundleID) != nil
         guard Self.activate(bundleID),
               Self.waitUntilFrontmost(bundleID, timeout: wasRunning ? 8 : 25) else {
@@ -156,7 +176,24 @@ final class Launcher {
         guard Keys.press(Keys.v, flags: [.maskControl, .maskShift], in: bundleID) else {
             return "\(name): you switched apps, so voice wasn't started"
         }
-        return "\(name): new chat + voice shortcut sent"
+        // Wait until the chat has the microphone. The launcher runs one thing at a time, so a
+        // second "Hey Chatty" or a "stop listening" waits here instead of landing mid-start.
+        if Self.waitForChatGPTMic(timeout: 6) { return "\(name): new chat + voice shortcut sent" }
+        // Usually ChatGPT is stuck on an earlier voice chat: it can hold its start lock until
+        // it quits, and every new chat fails with "Voice chat is already starting".
+        return "\(name): voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT."
+    }
+
+    /// Gap between stopping a ChatGPT voice chat and starting the next one.
+    private static let chatgptRestartGap: TimeInterval = 2
+
+    private static func waitForChatGPTMic(timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if MicActivity.assistantListening() == .chatgpt { return true }
+            Thread.sleep(forTimeInterval: 0.15)
+        }
+        return false
     }
 
     // MARK: Claude
@@ -333,6 +370,9 @@ final class Launcher {
             }
         case .chatgpt:
             // ⌃⇧V starts *or stops* the voice chat; it only reaches the app when it's in front.
+            // Hey AI only gets here once the chat has the microphone, so it stops. (Pressed
+            // while a chat is still starting, it would ask for a second one instead.)
+            defer { chatgptStoppedAt = Date() }
             Self.activate(Self.codexBundleID)
             guard Self.waitUntilFrontmost(Self.codexBundleID, timeout: 4) else {
                 return "ChatGPT didn't come to the front to stop voice"
