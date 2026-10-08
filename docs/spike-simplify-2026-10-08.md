@@ -108,7 +108,7 @@ My early-stop trials (below) did not reproduce the stuck lock: 0 reconnects in 7
 | Confirm "started" when the buttons merely changed (`composer buttons after press`) | 0 | **Delete** |
 | Second press after 2.5 s | 7 of 25 | Keep, **wait 1 s** (a working press shows in 0.37 s) |
 | Stop button and one retry | 1 retry | Keep |
-| ⌘D dictation, then **mouse-click fallback** for start, stop and send (`Mouse.click`, moves the pointer) | 0 of 24 | **Delete** the fallback |
+| ⌘D dictation, then a **mouse-click fallback** for start, stop and send (`Mouse.click` moves the pointer) | Start: 0 of 24. The stop and send fallbacks aren't logged | **Replace** with a second ⌘D (no pointer move) |
 | `MicState` width fallback when the button has no pressed state | 0 (always `pressed=0/1`) | **Delete** |
 | Send strip with verification; stop-phrase strip; dictation watcher; 10-min limit | used | Keep |
 
@@ -203,10 +203,39 @@ Each step is its own PR and needs the owner's go-ahead. No releases without it.
    - Add a "Restart ChatGPT" button in Setup when the hotkey isn't live yet.
 3. **Claude cleanup**:
    - Use a 1 s second-press wait.
-   - **Delete** the unlabeled voice-button fallback, the "buttons changed" confirmation, the three `Mouse.click` fallbacks with `Mouse` itself, and the `MicState` width fallback.
+   - **Delete** the unlabeled voice-button fallback, the "buttons changed" confirmation, and the `MicState` width fallback.
+   - Replace the three `Mouse.click` fallbacks with a second ⌘D, and delete `Mouse`.
 4. **Decide "Hey Codex"**: alias, deep link, or drop it.
 5. **After a week of logs**: if the audio-aware hold never extends, replace `SpeechActivity` and `ContinuationHold` with a fixed 0.7 s hold.
 
 ## 7. Prototype on this branch
 
-See the commit after this doc. It does steps 1 and 3; the README and Setup copy in step 2 are left out.
+The commit after this doc does steps 1 and 3. It builds with `./build.sh` (162 test cases, 17 of them new for the keybindings file and shortcut parsing) and has **not been run live or installed**. That needs the owner's go-ahead.
+
+| | Before (1.0.14) | Prototype |
+| --- | --- | --- |
+| Source lines | 3,464 | 3,451. Existing files lose 245 and gain 164; new `ChatGPTHotkey.swift` (68 lines, pure and tested) |
+| ChatGPT state | `chatgptStoppedAt`, `chatgptConnectingSince`, `chatgptLiveSince`, AppDelegate `chatgptStarts`, `Result.connecting`, `onChatGPTConnectFinished` | One `chatgptAskedAt` timestamp |
+| Background work | A 15 s watcher thread per slow start | None |
+| ChatGPT timing constants | Restart gap 2 s, settle 2 s, connect limit 15 s, front delay | Pending limit 10 s; the fallback keeps its front delay and a 4 s settle |
+| Keystrokes to ChatGPT | ⌘⌥O (dead in 26.1002), ⌘N, ⌃⇧V, all needing ChatGPT in front | The hotkey (any app); ⌃⇧V only until ChatGPT has read the hotkey |
+| Pointer moves | `Mouse.click` in 3 places | None |
+
+What the prototype changes for the user:
+
+- "Hey Chatty" no longer brings ChatGPT forward; the voice overlay floats over the current app.
+- "Hey Codex" is the same voice chat with ChatGPT brought forward, without ⌘N.
+- With the fallback, "stop listening" during a start asks you to say it again once ChatGPT is talking, instead of queueing the stop.
+- A slow start no longer reports its late connect in the menu.
+
+Each of these is an owner decision before anything ships.
+
+Not done: the Setup copy and Restart-ChatGPT button, README, and a live 20+20 cycle check of this build.
+
+To rerun the measurements, rebuild the harness described above:
+
+- a `heyai://debug/…` URL hook and a `debugDryRun` default, both marked `// DEBUG-TEST`;
+- a trial loop that records press, mic and stop times to a scratch JSON file;
+- a join of that file against `~/.codex/state_5.sqlite` and ChatGPT's desktop log.
+
+Never commit it.

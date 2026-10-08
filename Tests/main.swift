@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // Runs the wake-phrase and send-phrase matchers against known transcripts. Built and run
@@ -234,8 +235,8 @@ stopTail("Stop listening to the queue", "Stop listening to the queue")
 func menu(_ result: String, _ expected: String) {
     check(MenuText.forResult(result) == expected, "menu: \"\(result)\" → \"\(MenuText.forResult(result))\", expected \"\(expected)\"")
 }
-menu("ChatGPT: new chat + voice shortcut sent", "Opened ChatGPT voice")
-menu("Codex: new chat + voice shortcut sent", "Opened Codex voice")
+menu("ChatGPT: voice chat started", "Opened ChatGPT voice")
+menu("Codex: voice chat started", "Opened Codex voice")
 menu("Claude: voice mode started (second press)", "Opened Claude voice")
 menu("Claude Code: sent (42 characters)", "Sent your prompt to Claude Code")
 menu("ChatGPT: stopped listening", "Ended the ChatGPT voice chat")
@@ -243,11 +244,41 @@ menu("Claude: stopped listening", "Ended the Claude voice chat")
 menu("Claude Code: stopped listening", "Stopped dictating to Claude Code. Nothing was sent.")
 menu("Claude isn't installed", "Claude isn't installed")
 menu("ChatGPT: already in a voice chat", "ChatGPT is already in a voice chat")
-menu("ChatGPT: voice chat is still connecting", "ChatGPT voice is still connecting…")
-menu("ChatGPT: still connecting the last voice chat", "ChatGPT is still connecting the last voice chat")
-menu("ChatGPT: voice chat connected after 11 s", "Opened ChatGPT voice (it took 11 s to connect)")
-menu("ChatGPT: voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT.",
-     "ChatGPT's voice chat didn't start. If it says it's already starting, quit and reopen ChatGPT.")
+menu("ChatGPT: still starting the last voice chat", "ChatGPT is still starting the last voice chat")
+menu("ChatGPT: asked ChatGPT for a voice chat, but it hasn't started yet",
+     "Asked ChatGPT for a voice chat. If it doesn't start, say “Hey Chatty” again.")
+menu("Codex: asked ChatGPT for a voice chat, but it hasn't started yet",
+     "Asked Codex for a voice chat. If it doesn't start, say “Hey Codex” again.")
+
+// ChatGPT's Voice Chat hotkey in ~/.codex/keybindings.json
+func data(_ json: String?) -> Data? { json.map { Data($0.utf8) } }
+check(ChatGPTHotkey.key(in: nil) == nil, "hotkey: no file")
+check(ChatGPTHotkey.key(in: data(#"[{"command":"realtimeVoice","key":"Control+Alt+Command+V"}]"#)) == "Control+Alt+Command+V", "hotkey: set")
+check(ChatGPTHotkey.key(in: data(#"[{"command":"realtimeVoice","key":null}]"#)) == nil, "hotkey: cleared")
+check(ChatGPTHotkey.key(in: data(#"[{"command":"newTask","key":"CmdOrCtrl+N"}]"#)) == nil, "hotkey: other bindings only")
+check(ChatGPTHotkey.key(in: data("not json")) == nil, "hotkey: unreadable file")
+func added(_ json: String?) -> [[String: String?]]? {
+    guard let out = ChatGPTHotkey.adding(to: data(json)),
+          let list = try? JSONSerialization.jsonObject(with: out) as? [[String: Any]] else { return nil }
+    return list.map { $0.mapValues { $0 as? String } }
+}
+check(added(nil)?.count == 1 && added(nil)?.first?["key"] == "Control+Alt+Command+V", "add: no file")
+check(added("  \n")?.count == 1, "add: empty file")
+check(added(#"[{"command":"newTask","key":"CmdOrCtrl+N"}]"#)?.count == 2, "add: keeps other bindings")
+check(added(#"[{"command":"realtimeVoice","key":"Control+Shift+Space"}]"#) == nil, "add: user already set one")
+check(added(#"[{"command":"realtimeVoice","key":null}]"#) == nil, "add: user cleared it")
+check(added("{\"bindings\":[]}") == nil, "add: unknown shape is left alone")
+check(added("not json") == nil, "add: unreadable file is left alone")
+func accel(_ s: String, _ key: CGKeyCode?, _ flags: CGEventFlags = []) {
+    let got = ChatGPTHotkey.parse(s)
+    check(got?.key == key && (key == nil || got?.flags == flags), "parse \"\(s)\" → \(got.map { "\($0.key) \($0.flags.rawValue)" } ?? "nil")")
+}
+accel("Control+Alt+Command+V", 9, [.maskControl, .maskAlternate, .maskCommand])
+accel("Ctrl+Shift+Space", 49, [.maskControl, .maskShift])
+accel("CmdOrCtrl+Alt+1", 18, [.maskCommand, .maskAlternate])
+accel("V", nil)
+accel("Control+F19", nil)
+accel("Control+V+B", nil)
 
 if failures == 0 {
     print("matcher: all \(count) cases passed")
