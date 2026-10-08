@@ -52,6 +52,9 @@ final class WakeListener {
     private var sendWatchStarted = Date.distantPast
     private var lastHeardChange = Date.distantPast
     private var lastHeardText = ""
+    /// Bumped whenever the transcript changes; unlike lastHeardText it survives a new
+    /// recognition task, so "nothing new was said" checks aren't fooled by a restart.
+    private var heardChanges = 0
     /// Word count of the transcript before the current utterance (speech after a pause).
     private var utteranceStart = 0
     private var utteranceStartedAt = Date.distantPast
@@ -213,7 +216,7 @@ final class WakeListener {
         newRequest.shouldReportPartialResults = true
         newRequest.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
         newRequest.contextualStrings = isWatchingForSend
-            ? ["send it", "enter"]
+            ? ["yes", "send it", "enter"]
             : ["Hey Chatty", "Hey Codex", "Hey Claude", "Hey Claude Code", "Chatty", "Codex", "Claude"]
         newRequest.addsPunctuation = false
 
@@ -247,10 +250,11 @@ final class WakeListener {
                 }
                 lastHeardText = text
                 lastHeardChange = Date()
+                heardChanges += 1
             }
-            checkStopPhrase(text)
+            if checkStopPhrase(text, isFinal: result.isFinal) { return }
             if isWatchingForSend {
-                checkSendPhrase(text)
+                if checkSendPhrase(text, isFinal: result.isFinal) { return }
             } else if Date() >= cooldownUntil, let match = firstMatch(in: result) {
                 if match.mayContinue {
                     holdForContinuation(match, text: text)
@@ -299,26 +303,38 @@ final class WakeListener {
         }
     }
 
-    /// Fires once a stop phrase ends the transcript and nothing new follows for a moment.
-    private func checkStopPhrase(_ text: String) {
+    /// Fires once a stop phrase ends the transcript and nothing new follows for a moment,
+    /// or right away if the recognizer has already marked the result final. True if it
+    /// fired now.
+    private func checkStopPhrase(_ text: String, isFinal: Bool) -> Bool {
         stopTimer?.invalidate()
         if isWatchingForSend {
             // Mid-dictation it has to be said on its own, after a pause.
             let words = WakeMatcher.normalize(text)
-            guard StopPhrase.isWhole(Array(words.dropFirst(min(utteranceStart, words.count)))) else { return }
+            guard StopPhrase.isWhole(Array(words.dropFirst(min(utteranceStart, words.count)))) else { return false }
         } else {
-            guard StopPhrase.ends(text) else { return }
+            guard StopPhrase.ends(text) else { return false }
         }
-        stopTimer = Timer.scheduledTimer(withTimeInterval: Self.stopSettle, repeats: false) { [weak self] _ in
-            guard let self, self.isRunning, self.lastHeardText == text else { return }
+        let stop = { [weak self] in
+            guard let self, self.isRunning else { return }
             self.sendTimer?.invalidate()
             self.onStopPhrase?()
             self.startTask()
         }
+        if isFinal { stop(); return true }
+        let changes = heardChanges
+        stopTimer = Timer.scheduledTimer(withTimeInterval: Self.stopSettle, repeats: false) { [weak self] _ in
+            guard let self, self.heardChanges == changes else { return }
+            stop()
+        }
+        return false
     }
 
-    /// Fires once a send command ends the transcript and a second passes with nothing new.
-    private func checkSendPhrase(_ text: String) {
+    /// Fires once a send command ends the transcript and a second passes with nothing new,
+    /// or right away if the recognizer has already marked the result final (it often does
+    /// for a short reply like "yes" after a pause, and then starts a fresh transcript).
+    /// True if it fired now.
+    private func checkSendPhrase(_ text: String, isFinal: Bool) -> Bool {
         sendTimer?.invalidate()
         let words = WakeMatcher.normalize(text)
         let utterance = Array(words.dropFirst(min(utteranceStart, words.count)))
@@ -326,14 +342,21 @@ final class WakeListener {
         guard let command = SendPhrase.command(words: words, utterance: utterance, nudged: nudged) else {
             // Talking again after the nudge: hide it until the next pause.
             if nudgedAt != nil && !utterance.isEmpty { onNudge?(false) }
-            return
+            return false
         }
-        sendTimer = Timer.scheduledTimer(withTimeInterval: Self.sendSettle, repeats: false) { [weak self] _ in
-            guard let self, self.isWatchingForSend, self.lastHeardText == text else { return }
+        let send = { [weak self] in
+            guard let self, self.isWatchingForSend else { return }
             self.stopWatchingForSend()
             self.onSendPhrase?(command)
             self.startTask()
         }
+        if isFinal { send(); return true }
+        let changes = heardChanges
+        sendTimer = Timer.scheduledTimer(withTimeInterval: Self.sendSettle, repeats: false) { [weak self] _ in
+            guard let self, self.heardChanges == changes else { return }
+            send()
+        }
+        return false
     }
 
     /// Checks the best transcription and the recognizer's runner-up guesses, since a

@@ -120,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listener.onNudge = { [weak self] show in
             guard let self else { return }
             if show {
+                Log.info("Claude Code: asked “Done?”")
                 self.nudge.show(above: self.nudgeAnchor)
                 let tick = NSSound(named: "Tink")
                 tick?.volume = 0.3
@@ -465,7 +466,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(info(statusLine))
         if listener.isWatchingForSend {
-            menu.addItem(info("Dictating to Claude Code. Say “send it” or “enter”."))
+            menu.addItem(info("Dictating to Claude Code. Say “yes” or “send it” to send."))
             menu.addItem(item("Send Now", #selector(sendNow)))
             menu.addItem(item("Don’t Send", #selector(stopWaitingForSend)))
         }
