@@ -1,6 +1,13 @@
 # Spike: the simplest reliable Hey AI (2026-10-08)
 
-Branch `spike/simplify-wake-words`. Research, measurements and a prototype. Nothing is merged or released, and installed Hey AI is still 1.0.14.
+Branch `spike/simplify-wake-words`. Research, measurements and a live-tested prototype. Nothing is merged or released, and installed Hey AI is still 1.0.14.
+
+**Owner decisions (10-08):**
+
+1. Turn the hotkey on automatically. Use the hotkey you set if there is one; otherwise set it up and ask to restart ChatGPT, and if you don't restart, say it kicks in at the next restart.
+2. "Hey Chatty" doesn't need to bring ChatGPT forward.
+3. Keep "Hey Codex" as an alias.
+4. Live-test the prototype, then open a draft PR.
 
 ## Executive brief
 
@@ -133,16 +140,20 @@ Start ("Hey Chatty"):
   ChatGPT not installed               → say so
   ChatGPT has the mic                 → "already in a voice chat" (pressing would stop it)
   Hey AI pressed < 10 s ago, no mic   → "still starting" (pressing would cancel it)
-  otherwise                           → press the hotkey; note pendingSince; wait ≤ 2 s for the mic, then report
+  otherwise                           → press the hotkey; note the time (chatgptAskedAt); wait ≤ 2 s for the mic, then report
 Stop ("stop listening", ChatGPT is the target):
   ChatGPT has the mic, or a start is pending → press the hotkey; wait ≤ 3 s for the mic to go
 ```
 
-- **Turning it on**: Hey AI adds the entry at setup (and at launch if missing), merging into any existing file. It never overrides a binding you set or cleared yourself, and never writes a file it can't parse.
-- **When it's live**: a binding exists, and either you set it in ChatGPT or ChatGPT launched after Hey AI wrote it. Until then Hey AI uses the ⌃⇧V fallback and suggests restarting ChatGPT once.
-- **Fallback when the hotkey isn't live**: today's ⌃⇧V path, trimmed: front, ⌃⇧V, 2 s mic wait, the same `pendingSince` guard, and a 3 s settle before a ⌃⇧V stop. No background watcher, no stop-once-started, no restart gap.
-- **"Hey Codex"**: the voice is identical, so the cheapest reliable version is "Hey Chatty, then bring ChatGPT forward". The ⌘N keystroke is the fragile part; a `codex://new?mode=codex` deep link could replace it but didn't visibly switch a window that had a Codex task running. Owner decision: keep "Hey Codex" as an alias, deep-link it, or drop it.
-- **Bring ChatGPT forward for "Hey Chatty"?** It's not needed: the voice overlay floats over the current app. Owner decision. Not activating is faster and avoids stealing focus.
+- **Turning it on** (at every launch, until it's done):
+  - You set one in ChatGPT: Hey AI uses it. If it's a key Hey AI can't press (a function key, or a modifier on its own), Hey AI uses ⌃⇧V and logs why.
+  - You removed it in ChatGPT's settings, or the file isn't one Hey AI can read: it's left alone, and Hey AI uses ⌃⇧V.
+  - Otherwise Hey AI adds ⌃⌥⌘V, merging into any existing file. If ChatGPT is running, Hey AI asks to restart it: as a row in the setup window on first run, or as a one-time alert ("Restart ChatGPT" / "Later"). After Later, the menu says the hotkey kicks in the next time ChatGPT restarts. If ChatGPT isn't running, it picks the hotkey up when it opens.
+- **When it's live**: a binding exists, and either you set it in ChatGPT or ChatGPT launched after Hey AI wrote it. Until then Hey AI uses the ⌃⇧V fallback.
+- **Restart ChatGPT**: Hey AI quits ChatGPT, which may ask you to confirm, waits up to 30 s for it to exit, then opens it again. The alert warns that this ends anything ChatGPT is in the middle of.
+- **Fallback when the hotkey isn't live**: today's ⌃⇧V path, trimmed. It brings ChatGPT forward, presses ⌃⇧V, waits up to 2 s for the mic, uses the same pending-start guard, and waits until 4 s after the start before a ⌃⇧V stop. There's no background watcher, no stop-once-started and no restart gap.
+- **"Hey Codex"** (decided: alias): the same voice chat as "Hey Chatty". ChatGPT's agent can hand work to Codex.
+- **Bring ChatGPT forward?** (decided: no): the voice window floats over the current app.
 
 Risks: `keybindings.json` and the `realtimeVoice` id are undocumented (but so are ⌃⇧V and every Accessibility path). The combo could clash with another app's global shortcut; ChatGPT then logs "Unable to register voice chat hotkey", and Hey AI's fallback would need to read that line. Users get a system-wide ⌃⌥⌘V (a bonus).
 
@@ -191,46 +202,59 @@ Notes:
 
 ## 6. Plan
 
-Each step is its own PR and needs the owner's go-ahead. No releases without it.
+Status after the owner's go-ahead on 10-08: steps 1–4 are done on this branch (draft PR). Shipping needs the owner's go-ahead.
 
-1. **ChatGPT through the Voice Chat hotkey** (prototype on this branch):
-   - Add `ChatGPTHotkey` (read and merge `keybindings.json`, liveness check, accelerator parse) and set it up at launch.
-   - Start and stop through the hotkey; trim the ⌃⇧V fallback.
-   - **Delete**: `chatgptConnectingSince` and the background watcher, `Result.connecting`, `onChatGPTConnectFinished`, AppDelegate `chatgptStarts`, `endChatGPTVoiceOnceStarted`, `chatgptRestartGap`, the `chatgptSettle` stop delay on the hotkey path, the ⌘⌥O fallback, and the "connecting" menu strings.
-   - Live check: 20 start/stop cycles with the Mac idle and 20 in use, plus a hotkey stop→start 0.5 s apart (closes the restart-gap question).
-2. **Setup and README**:
-   - Say that Hey AI turns on ChatGPT's Voice Chat hotkey (⌃⌥⌘V) and that ChatGPT must restart once.
-   - Add a "Restart ChatGPT" button in Setup when the hotkey isn't live yet.
-3. **Claude cleanup**:
-   - Use a 1 s second-press wait.
-   - **Delete** the unlabeled voice-button fallback, the "buttons changed" confirmation, and the `MicState` width fallback.
-   - Replace the three `Mouse.click` fallbacks with a second ⌘D, and delete `Mouse`.
-4. **Decide "Hey Codex"**: alias, deep link, or drop it.
-5. **After a week of logs**: if the audio-aware hold never extends, replace `SpeechActivity` and `ContinuationHold` with a fixed 0.7 s hold.
+1. **ChatGPT through the Voice Chat hotkey** (done):
+   - `ChatGPTHotkey`: read and merge `keybindings.json`, liveness check, accelerator parse.
+   - Start and stop through the hotkey, with a trimmed ⌃⇧V fallback.
+   - **Deleted**: `chatgptConnectingSince` and the background watcher, `Result.connecting`, `onChatGPTConnectFinished`, AppDelegate `chatgptStarts`, `endChatGPTVoiceOnceStarted`, `chatgptRestartGap`, `chatgptSettle`, the ⌘⌥O and ⌘N keystrokes, and the "connecting" menu strings.
+2. **Setup and README** (done): use your hotkey or add one; a restart row in the setup window or a one-time alert; README and site copy.
+3. **Claude cleanup** (done):
+   - The second voice press comes after 1 s.
+   - **Deleted** the unlabeled voice-button fallback, the "buttons changed" confirmation, the `MicState` width fallback, and `Mouse`. The three click fallbacks are now a second ⌘D.
+4. **"Hey Codex"** (done): an alias of "Hey Chatty".
+5. **Next**: release when the owner says so. After a week of logs, if the audio-aware hold never extends, replace `SpeechActivity` and `ContinuationHold` with a fixed 0.7 s hold.
 
 ## 7. Prototype on this branch
 
-The commit after this doc does steps 1 and 3. It builds with `./build.sh` (162 test cases, 17 of them new for the keybindings file and shortcut parsing) and has **not been run live or installed**. That needs the owner's go-ahead.
+Three commits after this doc. `./build.sh` runs 166 test cases (21 new, for the keybindings file and shortcut parsing).
 
 | | Before (1.0.14) | Prototype |
 | --- | --- | --- |
-| Source lines | 3,464 | 3,451. Existing files lose 245 and gain 164; new `ChatGPTHotkey.swift` (68 lines, pure and tested) |
+| Source lines | 3,464 | 3,597. 246 deleted, 379 added: 84 for `ChatGPTHotkey.swift`, about 100 for the setup and restart flow |
 | ChatGPT state | `chatgptStoppedAt`, `chatgptConnectingSince`, `chatgptLiveSince`, AppDelegate `chatgptStarts`, `Result.connecting`, `onChatGPTConnectFinished` | One `chatgptAskedAt` timestamp |
 | Background work | A 15 s watcher thread per slow start | None |
 | ChatGPT timing constants | Restart gap 2 s, settle 2 s, connect limit 15 s, front delay | Pending limit 10 s; the fallback keeps its front delay and a 4 s settle |
 | Keystrokes to ChatGPT | ⌘⌥O (dead in 26.1002), ⌘N, ⌃⇧V, all needing ChatGPT in front | The hotkey (any app); ⌃⇧V only until ChatGPT has read the hotkey |
 | Pointer moves | `Mouse.click` in 3 places | None |
 
-What the prototype changes for the user:
+So the code is not shorter, because of the new setup flow. But the fragile part, timing ChatGPT from the outside, is mostly gone.
 
-- "Hey Chatty" no longer brings ChatGPT forward; the voice overlay floats over the current app.
-- "Hey Codex" is the same voice chat with ChatGPT brought forward, without ⌘N.
-- With the fallback, "stop listening" during a start asks you to say it again once ChatGPT is talking, instead of queueing the stop.
+What else changes for the user:
+
+- With the ⌃⇧V fallback, "stop listening" during a start asks you to say it again once ChatGPT is talking, instead of queueing the stop.
 - A slow start no longer reports its late connect in the menu.
 
-Each of these is an owner decision before anything ships.
+### Live check of the prototype (12:34–12:39Z)
 
-Not done: the Setup copy and Restart-ChatGPT button, README, and a live 20+20 cycle check of this build.
+The prototype build ran in place of 1.0.14, in dry run so it ignored real wake words, driven by `heyai://open/…` and a temporary stop hook. ChatGPT was never quit.
+
+| Check | Result |
+| --- | --- |
+| Launch with your hotkey already set | Logged "using yours (Control+Alt+Command+V)" |
+| "Hey Chatty" ×8, "Hey Codex" ×3 (stops at 0.5 s or 2 s) | **11 of 11** started, mic in 0.34–0.70 s (including URL dispatch); 11 of 11 stopped in ~0.08 s |
+| "Stop listening" 0.15 s after the request | 3 of 3 ended the chat |
+| Start again 0.5 s after a stop | 3 of 3 (the old 2 s restart gap isn't needed) |
+| "Hey Chatty" during a live chat | 2 of 2 left the chat running ("already in a voice chat") |
+| ⌃⇧V fallback (hotkey treated as not live yet) | 3 of 3 started (0.51–0.83 s, Mac idle); 3 of 3 stopped (1.4–1.7 s, because of the 4 s settle) |
+| ChatGPT's desktop log during all of the above | 0 "already starting", 0 "interrupted" |
+| "Hey Claude" ×3 | 3 of 3. One needed the second press, which now came after 1.09 s; voice started 2.1 s after the request (about 3.4 s before) |
+| "Hey Claude Code" ×2, then "stop listening" | 2 of 2 dictating; 2 of 2 stopped |
+| Hotkey setup against a scratch keybindings file | None → added ⌃⌥⌘V and showed the alert (Later chosen, logged). Cleared, yours, yours-but-unpressable and unreadable all behaved as designed and left the file alone |
+| Setup-window row | Shows "Hey AI turned on ChatGPT's voice hotkey (⌃⌥⌘V)…" with a "Restart ChatGPT now" link |
+| Quit and reopen (on Apple's Chess, not ChatGPT) | Quit and reopened with a new process in about 1.3 s |
+
+Not checked live: "Restart ChatGPT" on ChatGPT itself (never quit while the owner's Codex tasks run), and the first launch on a Mac where ChatGPT has never been opened.
 
 To rerun the measurements, rebuild the harness described above:
 
