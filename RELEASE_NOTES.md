@@ -1,4 +1,4 @@
-**New in 1.0.10:** “Hey Chatty” is recognized again right after a Claude Code dictation ends, and “Hey Claude Code” no longer opens plain Claude when the recognizer briefly drops the “Hey”.
+**New in 1.0.11:** “Hey Claude Code” is told apart from “Hey Claude” more reliably: if you're still talking when the recognizer is slow to deliver “Code”, Hey AI waits for it. And “stop listening” presses Claude's Stop button again if Claude ignored the first press.
 
 Say an assistant's name and it opens, ready to talk.
 

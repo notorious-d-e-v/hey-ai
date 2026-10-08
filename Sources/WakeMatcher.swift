@@ -252,3 +252,37 @@ struct GreetingCarry {
         return match
     }
 }
+
+/// Tells speech from background noise in the microphone level: anything 10 dB over a
+/// noise floor that drops at once and creeps up slowly (so a few seconds of talking don't
+/// raise it much).
+struct SpeechActivity {
+    private(set) var noiseFloor: Float?
+
+    /// Feed one audio buffer's level in dBFS; true if it sounds like someone talking.
+    mutating func isSpeech(level: Float) -> Bool {
+        guard let floor = noiseFloor else { noiseFloor = level; return false }
+        noiseFloor = level < floor ? level : floor + (level - floor) * 0.005
+        return level > floor + 10
+    }
+}
+
+/// "hey claude" waits a moment in case "code" follows. The recognizer can deliver "code"
+/// late, so keep waiting while there's been speech since the transcript last changed: more
+/// words are on their way. A bare "Hey Claude" followed by silence isn't slowed down.
+enum ContinuationHold {
+    /// Transcript unchanged this long with nothing more said: it was just "hey claude".
+    static let wait: TimeInterval = 0.5
+    /// Speech this long after the last transcript change counts as another word coming.
+    static let speechMargin: TimeInterval = 0.15
+    /// Once it's been quiet this long, whatever was said should be in the transcript.
+    static let settled: TimeInterval = 0.6
+    /// Never hold longer than this in all.
+    static let limit: TimeInterval = 1.5
+
+    static func keepWaiting(now: Date, heldSince: Date, changedAt: Date, lastSpeechAt: Date) -> Bool {
+        now.timeIntervalSince(heldSince) < limit
+            && lastSpeechAt.timeIntervalSince(changedAt) > speechMargin
+            && now.timeIntervalSince(lastSpeechAt) < settled
+    }
+}

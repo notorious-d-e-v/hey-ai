@@ -187,6 +187,15 @@ final class Launcher {
     /// Gap between stopping a ChatGPT voice chat and starting the next one.
     private static let chatgptRestartGap: TimeInterval = 2
 
+    private static func waitUntilNotListening(_ assistant: MicActivity.Assistant, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if MicActivity.assistantListening() != assistant { return true }
+            Thread.sleep(forTimeInterval: 0.15)
+        }
+        return false
+    }
+
     private static func waitForChatGPTMic(timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -363,6 +372,11 @@ final class Launcher {
             if let stop = reader.claudeVoiceStopButton() {
                 Log.info("Claude: pressing “\(stop.label)” to end voice mode")
                 reader.press(stop.element)
+                // Right after voice starts, Claude sometimes ignores the first press.
+                if !Self.waitUntilNotListening(.claude, timeout: 1.5), let again = reader.claudeVoiceStopButton() {
+                    Log.info("Claude: still listening; pressing “\(again.label)” again")
+                    reader.press(again.element)
+                }
             } else if !stopClaudeCodeDictationNow() {
                 let lines = reader.describeControls()
                 Log.info("Claude: no Stop button found. Controls seen:\n" + lines.joined(separator: "\n"))
