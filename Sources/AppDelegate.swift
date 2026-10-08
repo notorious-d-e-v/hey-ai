@@ -483,9 +483,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             row.toolTip = "Opens \(target.displayName) now."
             menu.addItem(row)
         }
-        let canStop = listener.isWatchingForSend || MicActivity.assistantListening() != nil
-        let stop = phrase("stop listening", "Ends a voice chat", #selector(stopListeningNow), enabled: canStop)
-        if !canStop { stop.toolTip = "Nothing is listening right now." }
+        let stop = phrase("stop listening", "Ends a voice chat", #selector(stopListeningNow))
+        stop.toolTip = "Ends the voice chat or Claude Code dictation that's listening now."
         menu.addItem(stop)
 
         menu.addItem(.separator())
@@ -543,26 +542,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// A phrase you can say, highlighted per the brand, followed by what it does.
-    /// Attributed titles don't dim when disabled, so a disabled row fades itself.
-    private func phrase(_ words: String, _ does: String, _ action: Selector, enabled: Bool = true) -> NSMenuItem {
+    private func phrase(_ words: String, _ does: String, _ action: Selector) -> NSMenuItem {
         let row = item(words, action)
-        row.isEnabled = enabled
         let font = NSFont.menuFont(ofSize: 0)
         let pill = NSTextAttachment()
-        // Menus are rebuilt each time they open, so this follows light and dark mode.
-        let dark = (menu.appearance ?? NSApp.effectiveAppearance).bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        pill.image = Brand.phrasePill("“\(words)”", size: font.pointSize - 1, inactive: !enabled, dark: dark)
+        pill.image = Brand.phrasePill("“\(words)”", size: font.pointSize - 1)
         let size = pill.image!.size
         pill.bounds = CGRect(x: 0, y: (font.capHeight - size.height) / 2, width: size.width, height: size.height)
         let title = NSMutableAttributedString(attachment: pill)
-        var attributes: [NSAttributedString.Key: Any] = [.font: font]
-        attributes[.foregroundColor] = enabled ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor
-        title.append(NSAttributedString(string: "  \(does)", attributes: attributes))
+        title.append(NSAttributedString(string: "  \(does)", attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor]))
         row.attributedTitle = title
         return row
     }
 
-    @objc private func stopListeningNow() { stopListening() }
+    @objc private func stopListeningNow() {
+        guard listener.isWatchingForSend || MicActivity.assistantListening() != nil else {
+            lastAction = "Nothing was listening, so there was nothing to stop"
+            return
+        }
+        stopListening()
+    }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)

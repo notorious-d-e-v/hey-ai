@@ -1,4 +1,4 @@
-**New in 1.0.5:** the menu-bar menu opens with Hey AI's icon and what it's doing right now, and every phrase in it is a button: click “Hey Chatty” to open ChatGPT voice without saying a word.
+**New in 1.0.6:** the menu-bar menu opens with Hey AI's icon and what it's doing right now, and every phrase in it is a button: click “Hey Chatty” to open ChatGPT voice, or “stop listening” to end a voice chat, without saying a word.
 
 Say an assistant's name and it opens, ready to talk.
 
