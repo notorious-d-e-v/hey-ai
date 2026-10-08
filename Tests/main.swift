@@ -159,6 +159,19 @@ check(StopPhrase.isWhole(words("stop listening")), "stop whole: alone")
 check(StopPhrase.isWhole(words("hang up")), "stop whole: hang up alone")
 check(!StopPhrase.isWhole(words("and then hang up")), "stop whole: end of a sentence")
 
+// What the menu shows for a result
+func menu(_ result: String, _ expected: String) {
+    check(MenuText.forResult(result) == expected, "menu: \"\(result)\" → \"\(MenuText.forResult(result))\", expected \"\(expected)\"")
+}
+menu("ChatGPT: new chat + voice shortcut sent", "Opened ChatGPT voice")
+menu("Codex: new chat + voice shortcut sent", "Opened Codex voice")
+menu("Claude: voice mode started (second press)", "Opened Claude voice")
+menu("Claude Code: sent (42 characters)", "Sent your prompt to Claude Code")
+menu("ChatGPT: stopped listening", "Ended the ChatGPT voice chat")
+menu("Claude: stopped listening", "Ended the Claude voice chat")
+menu("Claude Code: stopped listening", "Stopped dictating to Claude Code. Nothing was sent.")
+menu("Claude isn't installed", "Claude isn't installed")
+
 if failures == 0 {
     print("matcher: all \(count) cases passed")
     exit(0)

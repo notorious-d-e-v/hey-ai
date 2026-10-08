@@ -133,7 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listener.onSendWatchEnded = { [weak self] reason in
             guard let self else { return }
             Log.info("Claude Code: \(reason)")
-            self.lastAction = "Claude Code: \(reason)"
+            self.lastAction = MenuText.forResult("Claude Code: \(reason)")
             self.launcher.stopWatchingDictation()
             self.nudge.hide()
             self.updateIcon()
@@ -365,7 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func report(_ result: String) {
-        lastAction = result
+        lastAction = MenuText.forResult(result)
         if result.contains("couldn't") || result.contains("didn't") || result.contains("needs")
             || result.contains("wasn't") {
             NSSound(named: "Basso")?.play()
@@ -423,7 +423,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         listener.stopWatchingForSend()
         launcher.stopWatchingDictation()
         nudge.hide()
-        lastAction = "Claude Code: stopped waiting to send"
+        lastAction = "Stopped dictating to Claude Code. Nothing was sent."
         updateIcon()
     }
 

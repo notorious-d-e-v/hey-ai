@@ -11,7 +11,12 @@ enum Log {
     }()
 
     private static let queue = DispatchQueue(label: "heyai.log")
-    private static let formatter = ISO8601DateFormatter()
+    /// Milliseconds, so the gap between hearing a phrase and acting on it shows up.
+    private static let formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
     private static let maxBytes = 2_000_000
 
     static func info(_ message: String) {
