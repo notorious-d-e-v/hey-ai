@@ -58,7 +58,9 @@ final class WakeListener {
     /// Word count of the transcript before the current utterance (speech after a pause).
     private var utteranceStart = 0
     private var utteranceStartedAt = Date.distantPast
+    /// When the "Done?" nudge last appeared, and whether it's showing now.
     private var nudgedAt: Date?
+    private var nudgeVisible = false
     private var sendTimer: Timer?
     private var sendWatchTimer: Timer?
     private var stopTimer: Timer?
@@ -81,6 +83,7 @@ final class WakeListener {
         sendWatchStarted = Date()
         lastHeardChange = Date()
         nudgedAt = nil
+        nudgeVisible = false
         sendWatchTimer?.invalidate()
         sendWatchTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.checkSendWatch()
@@ -94,7 +97,8 @@ final class WakeListener {
         isWatchingForSend = false
         sendTimer?.invalidate()
         sendWatchTimer?.invalidate()
-        if nudgedAt != nil { onNudge?(false) }
+        if nudgeVisible { onNudge?(false) }
+        nudgeVisible = false
         nudgedAt = nil
     }
 
@@ -104,7 +108,9 @@ final class WakeListener {
         onSendWatchEnded?(reason)
     }
 
-    /// Nudge once per pause, after something has been said.
+    /// Nudge once per pause, after something has been said. It stays up until you say
+    /// something new; the recognizer re-sending or tidying what you already said doesn't
+    /// count, and only a new utterance after the nudge earns another one.
     private func checkSendWatch() {
         guard isWatchingForSend else { return }
         if Date().timeIntervalSince(sendWatchStarted) > Self.sendWatchLimit {
@@ -112,8 +118,10 @@ final class WakeListener {
         }
         let quiet = Date().timeIntervalSince(lastHeardChange)
         let saidSomething = lastHeardChange > sendWatchStarted
-        if quiet >= Self.nudgeAfter, saidSomething, nudgedAt == nil || nudgedAt! < lastHeardChange {
+        let spokeSinceLastNudge = nudgedAt.map { utteranceStartedAt > $0 } ?? true
+        if !nudgeVisible, quiet >= Self.nudgeAfter, saidSomething, spokeSinceLastNudge {
             nudgedAt = Date()
+            nudgeVisible = true
             onNudge?(true)
         }
     }
@@ -244,7 +252,9 @@ final class WakeListener {
             let text = result.bestTranscription.formattedString
             onHeard?(text)
             if text != lastHeardText {
-                if lastHeardText.isEmpty || Date().timeIntervalSince(lastHeardChange) >= Self.utterancePause {
+                // A final result that rewords what was already heard is a revision, not new speech.
+                let paused = Date().timeIntervalSince(lastHeardChange) >= Self.utterancePause
+                if lastHeardText.isEmpty || (paused && !result.isFinal) {
                     utteranceStart = WakeMatcher.normalize(lastHeardText).count
                     utteranceStartedAt = Date()
                 }
@@ -340,8 +350,13 @@ final class WakeListener {
         let utterance = Array(words.dropFirst(min(utteranceStart, words.count)))
         let nudged = nudgedAt.map { utteranceStartedAt >= $0 } ?? false
         guard let command = SendPhrase.command(words: words, utterance: utterance, nudged: nudged) else {
-            // Talking again after the nudge: hide it until the next pause.
-            if nudgedAt != nil && !utterance.isEmpty { onNudge?(false) }
+            // New words after the nudge mean you're still talking: hide it until the next
+            // pause. (Updates to what you said before it don't count.)
+            if nudgeVisible, let shown = nudgedAt, utteranceStartedAt > shown, !utterance.isEmpty {
+                nudgeVisible = false
+                Log.info("Claude Code: hid “Done?” (you kept talking)")
+                onNudge?(false)
+            }
             return false
         }
         let send = { [weak self] in

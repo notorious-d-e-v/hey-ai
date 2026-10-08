@@ -1,4 +1,4 @@
-**New in 1.0.3:** in Claude Code, saying “yes” after a pause (or when the *Done?* bubble asks) now sends your prompt. It didn't always before.
+**New in 1.0.4:** in Claude Code, the *Done?* bubble now stays up until you say “yes” or start talking again. Before, it could vanish a moment after it appeared.
 
 Say an assistant's name and it opens, ready to talk.
 
