@@ -4,14 +4,15 @@ set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p build
 
-echo "· testing wake-phrase matcher"
-swiftc -O -swift-version 5 Sources/WakeMatcher.swift Sources/MenuText.swift Tests/main.swift -o build/matcher-tests
+echo "· testing wake-phrase matcher and ChatGPT hotkey"
+swiftc -O -swift-version 5 Sources/WakeMatcher.swift Sources/MenuText.swift Sources/ChatGPTHotkey.swift Tests/main.swift \
+  -o build/matcher-tests
 ./build/matcher-tests
 
 echo "· compiling Hey AI (Apple silicon + Intel)"
 SOURCES=(Sources/main.swift Sources/AppDelegate.swift Sources/WakeListener.swift Sources/WakeMatcher.swift
   Sources/Launcher.swift Sources/NudgePanel.swift Sources/MicActivity.swift Sources/Brand.swift
-  Sources/Setup.swift Sources/MenuHeader.swift Sources/MenuText.swift Sources/Log.swift)
+  Sources/Setup.swift Sources/MenuHeader.swift Sources/MenuText.swift Sources/Log.swift Sources/ChatGPTHotkey.swift)
 FRAMEWORKS=(-framework AppKit -framework SwiftUI -framework AVFoundation -framework Speech -framework CoreAudio
   -framework ApplicationServices -framework ServiceManagement -framework IOKit)
 pids=()

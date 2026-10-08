@@ -25,6 +25,8 @@ final class SetupModel: ObservableObject {
     /// Whether the microphone is actually being listened to right now.
     @Published var isListening = false
     @Published var isPaused = false
+    /// Hey AI added ChatGPT's voice hotkey, and ChatGPT has to restart to pick it up.
+    @Published var chatgptNeedsRestart = false
 
     var allGranted: Bool { microphone == .granted && speech == .granted && accessibility == .granted }
     var canListen: Bool { microphone == .granted && speech == .granted }
@@ -33,6 +35,7 @@ final class SetupModel: ObservableObject {
     /// is open), so listening starts, or restarts after Dictation is turned on.
     var onCanListen: (() -> Void)?
     var onFinish: (() -> Void)?
+    var onRestartChatGPT: (() -> Void)?
     /// The window was closed with its close button.
     var onClose: (() -> Void)?
 
@@ -312,7 +315,10 @@ private struct ReadyView: View {
 
             if Assistants.chatGPT {
                 PhraseRow(phrase: "Hey Chatty", opens: "ChatGPT, in voice mode")
-                PhraseRow(phrase: "Hey Codex", opens: "Codex, in voice mode")
+                PhraseRow(phrase: "Hey Codex", opens: "The same voice chat")
+                if model.chatgptNeedsRestart {
+                    RestartChatGPTRow(model: model)
+                }
             } else if Assistants.chatGPTClassicOnly {
                 MissingRow(text: "Your ChatGPT app is the older version.", link: "Get the new one",
                            url: "https://openai.com/chatgpt/download/")
@@ -417,6 +423,25 @@ private struct PhraseRow: View {
             Spacer(minLength: 0)
         }
         .padding(.bottom, compact ? 6 : 10)
+    }
+}
+
+/// Hey AI turned on ChatGPT's voice hotkey, which ChatGPT reads when it starts.
+private struct RestartChatGPTRow: View {
+    @ObservedObject var model: SetupModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Hey AI turned on ChatGPT's voice hotkey (\(ChatGPTHotkey.defaultKeySymbols)), so it can start ChatGPT voice from any app. It kicks in when ChatGPT restarts.")
+                .font(.system(size: 12.5))
+                .foregroundColor(Brand.graphite)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Restart ChatGPT now") { model.onRestartChatGPT?() }
+                .buttonStyle(.link)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Brand.signal)
+        }
+        .padding(.bottom, 12)
     }
 }
 

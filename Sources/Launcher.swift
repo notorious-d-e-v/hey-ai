@@ -3,13 +3,13 @@ import ApplicationServices
 
 /// Opens an assistant straight into a new voice conversation.
 ///
-/// - ChatGPT ("Hey Chatty") and Codex ("Hey Codex") both use the ChatGPT + Codex app
-///   (ChatGPT Classic has no voice mode any more): bring it forward, open a new chat —
-///   ⌘⌥O "New standalone chat" (no project folder) for ChatGPT, ⌘N "New Chat" in the
-///   current folder for Codex — then ⌃⇧V, the app's own "start voice chat" shortcut.
+/// - ChatGPT ("Hey Chatty") and Codex ("Hey Codex") both start the ChatGPT + Codex app's
+///   voice chat (ChatGPT Classic has no voice mode any more) with its Voice Chat hotkey,
+///   which works from any app (see `ChatGPTHotkey`). Until ChatGPT has read that hotkey,
+///   Hey AI brings ChatGPT forward and presses ⌃⇧V, its in-app "start voice chat" shortcut.
+///   "Hey Codex" is another name for the same voice chat.
 /// - Claude ("Hey Claude"): `claude://claude.ai/new` opens a new chat, then the composer's
-///   "Use voice mode" button is pressed through Accessibility. (Older claude.ai builds left
-///   that button unlabeled; then it is the rightmost unlabeled button in the bottom row.)
+///   "Use voice mode" button is pressed through Accessibility.
 /// - Claude Code ("Hey Claude Code"): `claude://code/new` opens a new session in the desktop
 ///   app's Code tab and ⌘D (Claude's "toggle dictation" shortcut) starts dictation. Claude
 ///   Code has no conversational voice mode; `finishClaudeCodeDictation` sends the prompt,
@@ -25,37 +25,45 @@ final class Launcher {
         var awaitingSend = false
         /// Screen frame (top-left origin) of the Claude Code prompt box, for the nudge.
         var anchor: CGRect?
-        /// ChatGPT voice is still connecting; `onChatGPTConnectFinished` reports how it ends.
-        var connecting = false
     }
-
-    /// Called (off the main thread) when a slow ChatGPT voice start finally connects or gives up.
-    var onChatGPTConnectFinished: ((String) -> Void)?
 
     private let queue = DispatchQueue(label: "heyai.launcher")
     private let monitorQueue = DispatchQueue(label: "heyai.dictation-monitor")
     /// The Claude Code session whose dictation Hey AI started (launcher queue only).
     private var codeSession: (reader: AXReader, composer: CodeComposer)?
     private var dictationTimer: DispatchSourceTimer?
-    /// When Hey AI last stopped a ChatGPT voice chat. Only touched on `queue`.
-    private var chatgptStoppedAt = Date.distantPast
-    /// Set while a slow ChatGPT voice start is still connecting. Only touched on `queue`.
-    private var chatgptConnectingSince: Date?
-    /// When a ChatGPT voice chat Hey AI started took the mic. Only touched on `queue`.
-    private var chatgptLiveSince: Date?
+    /// When Hey AI last asked ChatGPT to start a voice chat (nil once it's stopped). Read from
+    /// the main thread too, hence the lock.
+    private var chatgptAskedAt: Date?
+    private let chatgptLock = NSLock()
 
     /// Runs off the main thread; `completion` gets a one-line result for the menu and log.
     func open(_ target: WakeTarget, completion: @escaping (Result) -> Void) {
         queue.async {
             switch target {
-            // A voice chat always starts in a new chat of its own, so ChatGPT doesn't need one
-            // opened first. Codex opens a new Codex task to show behind it.
-            case .chatgpt: completion(self.openVoiceChat(name: "ChatGPT", newChat: nil))
-            case .codex: completion(self.openVoiceChat(name: "Codex", newChat: (Keys.n, .maskCommand)))
+            // Every voice chat starts in a new chat of its own, and it's the same voice chat
+            // (ChatGPT's agent, which can hand work to Codex) whichever name you use.
+            case .chatgpt: completion(Result(message: self.startVoiceChat(name: "ChatGPT")))
+            case .codex: completion(Result(message: self.startVoiceChat(name: "Codex")))
             case .claude: completion(Result(message: self.openClaudeVoice()))
             case .claudeCode: completion(self.openClaudeCodeDictation())
             }
         }
+    }
+
+    /// A ChatGPT voice chat Hey AI asked for is still starting: it hasn't taken the mic yet.
+    var chatgptStartPending: Bool {
+        chatgptLock.lock()
+        let asked = chatgptAskedAt
+        chatgptLock.unlock()
+        guard let asked else { return false }
+        return Date().timeIntervalSince(asked) < Self.chatgptStartLimit && !MicActivity.isListening(.chatgpt)
+    }
+
+    private func setChatGPTAskedAt(_ date: Date?) {
+        chatgptLock.lock()
+        chatgptAskedAt = date
+        chatgptLock.unlock()
     }
 
     /// Stops Claude Code dictation, removes the spoken command (if any), and sends the prompt.
@@ -107,21 +115,6 @@ final class Launcher {
     /// Ends the voice chat (or dictation) that `assistant` has open.
     func endVoice(_ assistant: MicActivity.Assistant, completion: @escaping (String) -> Void) {
         queue.async { completion(self.endVoiceNow(assistant)) }
-    }
-
-    /// Ends a ChatGPT voice chat that's still starting. This waits behind the start (the
-    /// queue runs one thing at a time) and stops the chat only if it came up.
-    func endChatGPTVoiceOnceStarted(completion: @escaping (String?) -> Void) {
-        queue.async {
-            if MicActivity.isListening(.chatgpt) { return completion(self.endVoiceNow(.chatgpt)) }
-            // Still connecting slowly: wait for it off the queue, so other assistants aren't held up.
-            guard let since = self.chatgptConnectingSince else { return completion(nil) }
-            let remaining = Self.chatgptConnectLimit - Date().timeIntervalSince(since)
-            DispatchQueue.global().async {
-                guard remaining > 0, Self.waitForChatGPTMic(timeout: remaining) else { return completion(nil) }
-                self.queue.async { completion(self.endVoiceNow(.chatgpt)) }
-            }
-        }
     }
 
     /// Stops the Claude Code dictation Hey AI started, without sending.
@@ -185,86 +178,119 @@ final class Launcher {
 
     // MARK: ChatGPT and Codex
 
-    /// Brings the ChatGPT + Codex app forward and starts voice (⌃⇧V), first opening a new
-    /// chat with `newChat` if given.
-    private func openVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)?) -> Result {
-        // `connecting` only when this call began the slow start, so each one is counted once.
-        let before = chatgptConnectingSince
-        let message = startVoiceChat(name: name, newChat: newChat)
-        return Result(message: message, connecting: chatgptConnectingSince != nil && chatgptConnectingSince != before)
-    }
-
-    private func startVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)?) -> String {
+    /// Starts a ChatGPT voice chat: with the Voice Chat hotkey when ChatGPT has it, otherwise
+    /// by bringing ChatGPT forward and pressing ⌃⇧V.
+    private func startVoiceChat(name: String) -> String {
         let bundleID = Self.codexBundleID
         guard Self.isInstalled(bundleID) else { return "ChatGPT isn't installed (Hey AI needs the current ChatGPT app)" }
         guard AXIsProcessTrusted() else {
             Self.activate(bundleID)
             return "\(name): opened, but Hey AI needs Accessibility permission to start voice"
         }
-        // One voice chat at a time. ChatGPT holds a lock while a voice chat starts, and
-        // asking for another before it lets go fails with "Voice chat is already starting".
-        if MicActivity.isListening(.chatgpt) {
-            Self.activate(bundleID)
-            return "\(name): already in a voice chat"
-        }
-        // A slow start from a moment ago may still connect; asking again would collide with it.
-        if let since = chatgptConnectingSince, Date().timeIntervalSince(since) < Self.chatgptConnectLimit {
-            Self.activate(bundleID)
-            return "\(name): still connecting the last voice chat"
-        }
-        // A chat that was just stopped takes a moment to wind down inside ChatGPT.
-        let sinceStop = Date().timeIntervalSince(chatgptStoppedAt)
-        if sinceStop < Self.chatgptRestartGap { Thread.sleep(forTimeInterval: Self.chatgptRestartGap - sinceStop) }
+        // Both ways in are toggles: pressing while a chat is live stops it, and pressing while
+        // one is still starting cancels it (hotkey) or collides with it (⌃⇧V).
+        if MicActivity.isListening(.chatgpt) { return "\(name): already in a voice chat" }
+        if chatgptStartPending { return "\(name): still starting the last voice chat" }
 
-        let wasRunning = Self.running(bundleID) != nil
-        guard Self.activate(bundleID),
-              Self.waitUntilFrontmost(bundleID, timeout: wasRunning ? 8 : 25) else {
-            return "\(name) didn't come to the front"
-        }
-        // A cold-launched app needs a moment before its shortcuts are wired up.
-        Thread.sleep(forTimeInterval: wasRunning ? 0.05 : 3)
-
-        // ⌃⇧V needs a window to land in; with every window closed, open a new chat.
-        let hasWindow = Self.running(bundleID).map { AXReader(pid: $0.processIdentifier).focusedWindow() != nil } ?? false
-        if let newChat = newChat ?? (hasWindow ? nil : (Keys.o, [.maskCommand, .maskAlternate])) {
-            guard Keys.press(newChat.key, flags: newChat.flags, in: bundleID) else {
+        if let hotkey = Self.chatgptHotkey() {
+            Keys.press(hotkey.key, flags: hotkey.flags)
+        } else {
+            let wasRunning = Self.running(bundleID) != nil
+            guard Self.activate(bundleID), Self.waitUntilFrontmost(bundleID, timeout: wasRunning ? 8 : 25) else {
+                return "\(name): ChatGPT didn't come to the front, so voice wasn't started"
+            }
+            // A cold-launched app needs a moment before its shortcuts are wired up.
+            Thread.sleep(forTimeInterval: wasRunning ? 0.05 : 3)
+            guard Keys.press(Keys.v, flags: [.maskControl, .maskShift], in: bundleID) else {
                 return "\(name): you switched apps, so voice wasn't started"
             }
-            Thread.sleep(forTimeInterval: 0.4)
         }
-        guard Keys.press(Keys.v, flags: [.maskControl, .maskShift], in: bundleID) else {
-            return "\(name): you switched apps, so voice wasn't started"
-        }
-        // Wait until the chat has the microphone. The launcher runs one thing at a time, so a
-        // second "Hey Chatty" or a "stop listening" waits here instead of landing mid-start.
-        if Self.waitForChatGPTMic(timeout: 2) { chatgptLiveSince = Date(); return "\(name): new chat + voice shortcut sent" }
-        // ChatGPT can take 10 seconds or more, say right after it updates. Keep watching
-        // without holding up other assistants, and don't ask it again in the meantime.
-        let since = Date()
-        chatgptConnectingSince = since
-        DispatchQueue.global().async {
-            let connected = Self.waitForChatGPTMic(timeout: Self.chatgptConnectLimit - 2)
-            let liveAt = Date()
-            let waited = Int(liveAt.timeIntervalSince(since).rounded()) + 2
-            self.queue.async {
-                if self.chatgptConnectingSince == since { self.chatgptConnectingSince = nil }
-                if connected { self.chatgptLiveSince = liveAt }
-                // Usually when it never connects, ChatGPT is stuck on an earlier voice chat: it
-                // can hold its start lock until it quits ("Voice chat is already starting").
-                self.onChatGPTConnectFinished?(connected
-                    ? "\(name): voice chat connected after \(waited) s"
-                    : "\(name): voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT.")
-            }
-        }
-        return "\(name): voice chat is still connecting"
+        setChatGPTAskedAt(Date())
+        // Usually the chat has the microphone within half a second. Right after ChatGPT
+        // updates it can take 10 s; `chatgptStartPending` keeps a second press from cancelling it.
+        return Self.waitForChatGPTMic(timeout: 2)
+            ? "\(name): voice chat started"
+            : "\(name): asked ChatGPT for a voice chat, but it hasn't started yet"
     }
 
-    /// Gap between stopping a ChatGPT voice chat and starting the next one.
-    private static let chatgptRestartGap: TimeInterval = 2
-    /// How long a ChatGPT voice start gets to connect before Hey AI gives up on it.
-    private static let chatgptConnectLimit: TimeInterval = 15
-    /// How long after ChatGPT takes the mic before a stop is honored.
-    private static let chatgptSettle: TimeInterval = 2
+    /// The Voice Chat hotkey, once the running ChatGPT has it: it was set in ChatGPT itself, or
+    /// ChatGPT started after Hey AI added it (ChatGPT reads the file only at launch).
+    static func chatgptHotkey() -> (key: CGKeyCode, flags: CGEventFlags)? {
+        guard let app = running(codexBundleID),
+              let key = ChatGPTHotkey.key(in: try? Data(contentsOf: ChatGPTHotkey.fileURL)),
+              let hotkey = ChatGPTHotkey.parse(key) else { return nil }
+        let defaults = UserDefaults.standard
+        if key == defaults.string(forKey: "chatgptHotkeyAdded"),
+           let added = defaults.object(forKey: "chatgptHotkeyAddedAt") as? Date,
+           let launched = app.launchDate, launched < added {
+            return nil
+        }
+        return hotkey
+    }
+
+    /// What `setUpChatGPTHotkey` found or did.
+    enum HotkeySetup: Equatable {
+        /// ChatGPT isn't installed or set up yet; try again next launch.
+        case unavailable
+        /// You set one in ChatGPT. `usable` is false for a key Hey AI can't press (say, a
+        /// function key or a modifier on its own), and then ⌃⇧V is used instead.
+        case yours(String, usable: Bool)
+        /// The keybindings file isn't one Hey AI can safely edit.
+        case unreadable
+        /// Hey AI added it just now. ChatGPT picks it up when it next starts.
+        case added
+        case failed(String)
+    }
+
+    /// Uses the Voice Chat hotkey you set in ChatGPT, or sets one if ChatGPT has none, including
+    /// when it was removed in ChatGPT's settings.
+    static func setUpChatGPTHotkey() -> HotkeySetup {
+        let url = ChatGPTHotkey.fileURL
+        // No ~/.codex yet: ChatGPT isn't installed or hasn't been opened.
+        guard isInstalled(codexBundleID),
+              FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) else { return .unavailable }
+        let data = try? Data(contentsOf: url)
+        switch ChatGPTHotkey.binding(in: data) {
+        case .set(let key): return .yours(key, usable: ChatGPTHotkey.parse(key) != nil)
+        case .unreadable: return .unreadable
+        case .none, .cleared: break
+        }
+        guard let updated = ChatGPTHotkey.adding(to: data) else { return .unreadable }
+        do {
+            try updated.write(to: url, options: .atomic)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        UserDefaults.standard.set(ChatGPTHotkey.defaultKey, forKey: "chatgptHotkeyAdded")
+        UserDefaults.standard.set(Date(), forKey: "chatgptHotkeyAddedAt")
+        return .added
+    }
+
+    /// Quits ChatGPT and opens it again, so it reads the voice hotkey Hey AI added.
+    func restartChatGPT(completion: @escaping (String) -> Void) {
+        queue.async { completion(Self.restart(Self.codexBundleID, name: "ChatGPT")) }
+    }
+
+    static func restart(_ bundleID: String, name: String) -> String {
+        guard let app = running(bundleID) else { return "\(name) isn't open. Its voice hotkey works once you open it." }
+        let pid = app.processIdentifier
+        app.terminate()
+        // It may ask you to confirm first, say while it's working on something.
+        let deadline = Date().addingTimeInterval(30)
+        while kill(pid, 0) == 0, Date() < deadline { Thread.sleep(forTimeInterval: 0.2) }
+        guard kill(pid, 0) != 0 else { return "\(name) didn't quit, so its voice hotkey kicks in the next time it restarts" }
+        guard activate(bundleID) else { return "\(name) quit but didn't open again. Open it to turn on its voice hotkey." }
+        return "Restarted \(name). Its voice hotkey is on."
+    }
+
+    /// How long a ChatGPT voice chat Hey AI asked for gets to take the mic before another
+    /// "Hey Chatty" may ask again.
+    private static let chatgptStartLimit: TimeInterval = 10
+    /// ⌃⇧V stops a chat cleanly only once ChatGPT's session is up. Stops 0.4–3.1 s after the
+    /// chat took the mic (about 0.4 s after the press) ended it with "Voice chat was
+    /// interrupted before the session could start", and an interrupted start is the likeliest
+    /// way ChatGPT gets stuck refusing new chats.
+    private static let shortcutStopSettle: TimeInterval = 4
 
     private static func waitUntilNotListening(_ assistant: MicActivity.Assistant, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -302,13 +328,13 @@ final class Launcher {
                let button = composer.voiceButtonCandidates.first {
                 Log.info("Claude: pressing voice button at \(button.frame) (\(composer.voiceButtonCandidates.count) candidates)")
                 reader.press(button.element)
-                if reader.waitForVoiceModeStart(near: composer, timeout: 2.5) {
+                // A press that works shows within 0.4 s.
+                if reader.waitForVoiceModeStart(near: composer, timeout: 1) {
                     return "Claude: voice mode started"
                 }
-                // A button pressed right as the page appears can be ignored; it still
-                // offers "Use voice mode" when that happens, so press it once more.
-                if let again = reader.findComposer(requireNewChat: false)?.voiceButtonCandidates.first,
-                   again.label.lowercased().contains("voice mode") {
+                // A button pressed right as the page appears can be ignored (about 1 in 4); it
+                // still offers "Use voice mode" when that happens, so press it once more.
+                if let again = reader.findComposer(requireNewChat: false)?.voiceButtonCandidates.first {
                     Log.info("Claude: voice didn't start; pressing the voice button again")
                     reader.press(again.element)
                     if reader.waitForVoiceModeStart(near: composer, timeout: 4) {
@@ -366,14 +392,13 @@ final class Launcher {
 
         let claude = Self.claudeBundleID
         let switched = Result(message: "Claude Code: you switched apps, so dictation wasn't started")
-        guard Keys.press(Keys.d, flags: .maskCommand, in: claude) else { codeSession = nil; return switched }
-        if reader.waitForMic(composer.micButton, recording: true, baseline: idle, timeout: 2.5) {
-            return dictating
-        }
-        Log.info("Claude Code: ⌘D didn't start dictation; clicking the mic button")
-        guard Mouse.click(at: composer.micButton.frame.center, in: claude) else { codeSession = nil; return switched }
-        if reader.waitForMic(composer.micButton, recording: true, baseline: idle, timeout: 2.5) {
-            return dictating
+        for attempt in 1...2 {
+            if attempt == 2 {
+                if reader.micState(composer.micButton).isRecording { return dictating } // started late
+                Log.info("Claude Code: ⌘D didn't start dictation; pressing it again")
+            }
+            guard Keys.press(Keys.d, flags: .maskCommand, in: claude) else { codeSession = nil; return switched }
+            if reader.waitForMic(composer.micButton, recording: true, timeout: 2.5) { return dictating }
         }
         codeSession = nil
         Log.info("Claude Code: mic button \(reader.micState(composer.micButton)) after both attempts")
@@ -396,14 +421,11 @@ final class Launcher {
         let claude = Self.claudeBundleID
         let switched = "Claude Code: you switched apps, so the prompt wasn't sent"
 
-        // Stop dictation. Clicking toggles it too, if the shortcut doesn't.
-        let state = reader.micState(composer.micButton)
-        if state.isRecording {
+        // Stop dictation, pressing ⌘D a second time if the first one didn't take.
+        for attempt in 1...2 where reader.micState(composer.micButton).isRecording {
+            if attempt == 2 { Log.info("Claude Code: ⌘D didn't stop dictation; pressing it again") }
             guard Keys.press(Keys.d, flags: .maskCommand, in: claude) else { return switched }
-            if !reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 3) {
-                guard Mouse.click(at: composer.micButton.frame.center, in: claude) else { return switched }
-                _ = reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 3)
-            }
+            if reader.waitForMic(composer.micButton, recording: false, timeout: 3) { break }
         }
 
         // The last words land in the prompt a moment after dictation stops.
@@ -462,16 +484,28 @@ final class Launcher {
                 return "Claude: couldn't find how to stop it"
             }
         case .chatgpt:
-            // ⌃⇧V starts *or stops* the voice chat; it only reaches the app when it's in front.
-            // Hey AI only gets here once the chat has the microphone, so it stops. (Pressed
-            // while a chat is still starting, it would ask for a second one instead.)
-            defer { chatgptStoppedAt = Date(); chatgptLiveSince = nil }
-            // ChatGPT takes the mic about 1.5 s before its session is up, and ignores a stop
-            // in between; wait until the chat it started has had a moment.
-            if let live = chatgptLiveSince {
-                let wait = Self.chatgptSettle - Date().timeIntervalSince(live)
+            // Both ways in are toggles, so with no chat live or starting a press would start one.
+            let live = MicActivity.isListening(.chatgpt)
+            guard live || chatgptStartPending else { return "ChatGPT: no voice chat to stop" }
+            chatgptLock.lock()
+            let asked = chatgptAskedAt
+            chatgptLock.unlock()
+            // The hotkey stops a live chat and cancels one that's still starting, from any app.
+            if let hotkey = Self.chatgptHotkey() {
+                Keys.press(hotkey.key, flags: hotkey.flags)
+                setChatGPTAskedAt(nil)
+                break
+            }
+            // ⌃⇧V only reaches ChatGPT in front, and can't cancel a start: pressed before the
+            // chat has the mic, it would ask for a second one.
+            guard live else {
+                return "ChatGPT: the voice chat is still starting. Say “stop listening” again once it's talking."
+            }
+            if let asked {
+                let wait = Self.shortcutStopSettle - Date().timeIntervalSince(asked)
                 if wait > 0 { Thread.sleep(forTimeInterval: wait) }
             }
+            setChatGPTAskedAt(nil)
             Self.activate(Self.codexBundleID)
             guard Self.waitUntilFrontmost(Self.codexBundleID, timeout: 4) else {
                 return "ChatGPT didn't come to the front to stop voice"
@@ -495,14 +529,15 @@ final class Launcher {
         let reader = AXReader(pid: app.processIdentifier)
         reader.enableWebAccessibility()
         guard let composer = reader.findCodeComposer(requireNewSession: false) else { return false }
-        let state = reader.micState(composer.micButton)
-        guard state.isRecording else { return true }
+        guard reader.micState(composer.micButton).isRecording else { return true }
         Self.activate(Self.claudeBundleID)
-        guard Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 4),
-              Keys.press(Keys.d, flags: .maskCommand, in: Self.claudeBundleID) else { return false }
-        if reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 2) { return true }
-        guard Mouse.click(at: composer.micButton.frame.center, in: Self.claudeBundleID) else { return false }
-        return reader.waitForMic(composer.micButton, recording: false, baseline: state, timeout: 2)
+        guard Self.waitUntilFrontmost(Self.claudeBundleID, timeout: 4) else { return false }
+        for attempt in 1...2 {
+            if attempt == 2 { Log.info("Claude Code: ⌘D didn't stop dictation; pressing it again") }
+            guard Keys.press(Keys.d, flags: .maskCommand, in: Self.claudeBundleID) else { return false }
+            if reader.waitForMic(composer.micButton, recording: false, timeout: 2) { return true }
+        }
+        return false
     }
 
     private static func claudeReader() -> AXReader? {
@@ -604,8 +639,6 @@ enum Session {
 
 enum Keys {
     static let d: CGKeyCode = 2           // kVK_ANSI_D
-    static let n: CGKeyCode = 45          // kVK_ANSI_N
-    static let o: CGKeyCode = 31          // kVK_ANSI_O
     static let v: CGKeyCode = 9           // kVK_ANSI_V
     static let returnKey: CGKeyCode = 36  // kVK_Return
     static let delete: CGKeyCode = 51     // kVK_Delete (backspace)
@@ -636,32 +669,6 @@ enum Keys {
     }
 }
 
-enum Mouse {
-    /// Clicks only if `bundleID` is still the frontmost app. False if it wasn't.
-    @discardableResult
-    static func click(at point: CGPoint, in bundleID: String) -> Bool {
-        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID else {
-            Log.info("didn't click: \(bundleID) is no longer in front")
-            return false
-        }
-        click(at: point)
-        return true
-    }
-
-    /// Clicks at a screen point (top-left origin, as Accessibility reports frames), then
-    /// puts the pointer back.
-    static func click(at point: CGPoint) {
-        let original = CGEvent(source: nil)?.location
-        let source = CGEventSource(stateID: .hidSystemState)
-        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
-            CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?
-                .post(tap: .cghidEventTap)
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        if let original { CGWarpMouseCursorPosition(original) }
-    }
-}
-
 extension CGRect {
     var center: CGPoint { CGPoint(x: midX, y: midY) }
 }
@@ -679,7 +686,7 @@ struct AXControl {
 struct ClaudeComposer {
     let textArea: AXControl
     let webArea: AXUIElement
-    /// Rightmost first.
+    /// The "Use voice mode" buttons on the page (there is one).
     let voiceButtonCandidates: [AXControl]
 
     /// The composer box plus its bottom row of buttons.
@@ -694,14 +701,12 @@ struct CodeComposer {
     let micButton: AXControl
 }
 
-/// What the dictation mic button looks like right now. While recording, its pressed state
-/// flips and it widens to fit a waveform.
+/// The dictation mic button's pressed state (1 while recording), or nil if it can't be read.
 struct MicState: CustomStringConvertible {
     let pressed: Int?
-    let width: CGFloat
 
     var isRecording: Bool { pressed == 1 }
-    var description: String { "pressed=\(pressed.map(String.init) ?? "n/a") width=\(Int(width))" }
+    var description: String { "pressed=\(pressed.map(String.init) ?? "n/a")" }
 }
 
 final class AXReader {
@@ -727,8 +732,8 @@ final class AXReader {
         AXUIElementPerformAction(element, kAXPressAction as CFString)
     }
 
-    /// The new-chat composer: the widest text area on a claude.ai page, plus the unlabeled
-    /// buttons in its bottom row. Voice mode is the rightmost of those.
+    /// The new-chat composer: the widest text area on a claude.ai page, plus its "Use voice
+    /// mode" button.
     func findComposer(requireNewChat: Bool) -> ClaudeComposer? {
         var areas = webAreas()
         if let focused = focusedWebArea() { areas.insert(focused, at: 0) }
@@ -742,24 +747,11 @@ final class AXReader {
                 .filter({ ($0.role == "AXTextArea" || $0.role == "AXTextField") && $0.frame.width > 250 })
                 .max(by: { $0.frame.width < $1.frame.width }) else { continue }
 
-            // Current claude.ai labels the button "Use voice mode".
             let labeled = controls.filter { c in
                 c.role == "AXButton" && c.label.lowercased().contains("voice mode")
             }
-            if !labeled.isEmpty {
-                return ClaudeComposer(textArea: textArea, webArea: webArea, voiceButtonCandidates: labeled)
-            }
-
-            // Older builds left it unlabeled: rightmost unlabeled button in the bottom row.
-            let ta = textArea.frame
-            let candidates = controls.filter { c in
-                c.role == "AXButton" && c.label.isEmpty
-                    && (16...64).contains(c.frame.width) && (16...64).contains(c.frame.height)
-                    && c.frame.midY > ta.minY && c.frame.midY < ta.maxY + 90
-                    && c.frame.midX > ta.minX - 40 && c.frame.midX < ta.maxX + 80
-            }.sorted { $0.frame.midX > $1.frame.midX }
-            guard !candidates.isEmpty else { continue }
-            return ClaudeComposer(textArea: textArea, webArea: webArea, voiceButtonCandidates: candidates)
+            guard !labeled.isEmpty else { continue }
+            return ClaudeComposer(textArea: textArea, webArea: webArea, voiceButtonCandidates: labeled)
         }
         return nil
     }
@@ -793,20 +785,14 @@ final class AXReader {
 
     func micState(_ mic: AXControl) -> MicState {
         let pressed = (copy(mic.element, kAXValueAttribute) as? NSNumber)?.intValue
-        return MicState(pressed: pressed, width: frame(mic.element)?.width ?? mic.frame.width)
+        return MicState(pressed: pressed)
     }
 
-    /// Waits for dictation to start or stop. Uses the pressed state when the button reports
-    /// one, otherwise its width (wider while recording).
-    func waitForMic(_ mic: AXControl, recording: Bool, baseline: MicState, timeout: TimeInterval) -> Bool {
+    /// Waits for dictation to start or stop.
+    func waitForMic(_ mic: AXControl, recording: Bool, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            let now = micState(mic)
-            if let pressed = now.pressed {
-                if (pressed == 1) == recording { return true }
-            } else if recording ? now.width > baseline.width + 4 : now.width < baseline.width - 4 {
-                return true
-            }
+            if let pressed = micState(mic).pressed, (pressed == 1) == recording { return true }
             Thread.sleep(forTimeInterval: 0.2)
         } while Date() < deadline
         return false
@@ -872,10 +858,6 @@ final class AXReader {
                 .filter { region.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
             let labels = buttons.map { $0.label.lowercased() }
             if labels.contains(where: { $0 == "cancel" || $0 == "stop" || $0.contains("end voice") }) {
-                return true
-            }
-            if !buttons.isEmpty && !labels.contains(where: { $0.contains("voice mode") }) {
-                Log.info("Claude: composer buttons after press: \(labels)")
                 return true
             }
             Thread.sleep(forTimeInterval: 0.3)
