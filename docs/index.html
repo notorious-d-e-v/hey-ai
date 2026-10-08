@@ -155,6 +155,9 @@
     .cmd { flex-direction: column; }
     .cmd button { padding: 12px; border-left: 0; border-top: 1px solid rgba(255,255,255,.14); }
   }
+  .demo { margin: 0 0 64px; }
+  .demo video { display: block; width: 100%; height: auto; border-radius: 14px; background: #111; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 12px 32px rgba(27,26,46,.14); }
+  .demo .fine { margin-top: 12px; }
   @media (prefers-reduced-motion: reduce) {
     .phrase.swap .said { animation: none; }
   }
@@ -185,11 +188,16 @@
       </div>
     </div>
 
+    <section class="demo" id="demo" aria-label="Demo video">
+      <video src="demo.mp4" poster="demo-poster.jpg" width="1920" height="1248" controls playsinline preload="metadata"></video>
+      <p class="fine">53 seconds, sound on: ChatGPT, Claude and Claude Code, opened by voice. The captions show what was said.</p>
+    </section>
+
     <section aria-labelledby="how">
       <h2 id="how">Up and talking in a minute</h2>
       <ol class="steps">
         <li><h3>Paste one line</h3><p>The installer downloads Hey AI, checks its SHA-256, puts it in Applications and opens it.</p></li>
-        <li><h3>Allow three things</h3><p>Microphone, speech recognition and Accessibility, from one window. You only do this once.</p></li>
+        <li><h3>Allow three things</h3><p>Microphone, speech recognition and Accessibility, from one window. You only do this once. If you use ChatGPT, Hey AI also asks to restart it once, so ChatGPT picks up its voice hotkey.</p></li>
         <li><h3>Say “Hey Chatty”</h3><p>ChatGPT opens with voice on. Talk. Say “stop listening” when you're done.</p></li>
       </ol>
       <div class="shots">
@@ -217,8 +225,8 @@
           <p class="muted">You'll see macOS's orange microphone dot while it listens. Pause it from the menu bar any time. While ChatGPT or Claude is already listening, Hey AI ignores wake phrases, so talking to your assistant never opens a second one.</p>
         </div>
         <div>
-          <p><strong>Why Accessibility?</strong> ChatGPT and Claude have no “start voice” link. After a wake phrase, Hey AI opens a new chat and either sends the app's own voice shortcut (ChatGPT, Codex, Claude Code) or presses the voice button (Claude).</p>
-          <p class="muted">Accessibility would let an app read and control any window. Hey AI only touches ChatGPT and Claude, only after a wake phrase, and checks that app is still in front before every key press. The <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/Sources/Launcher.swift">code</a> is short.</p>
+          <p><strong>Why Accessibility?</strong> ChatGPT and Claude have no “start voice” link. After a wake phrase, Hey AI presses ChatGPT's own Voice Chat hotkey, presses Claude's voice button in a new chat, or starts Claude Code's dictation with ⌘D.</p>
+          <p class="muted">Accessibility would let an app read and control any window. Hey AI only touches ChatGPT and Claude, and only after a wake phrase. Keys meant for an app go only while that app is in front; ChatGPT's voice hotkey is the one that works from anywhere. The <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/Sources/Launcher.swift">code</a> is short.</p>
         </div>
       </div>
     </section>
@@ -250,7 +258,7 @@
   const phrases = [
     ["“Hey Chatty”", "ChatGPT opens in voice mode, ready to talk."],
     ["“Hey Claude”", "Claude opens in voice mode, ready to talk."],
-    ["“Hey Codex”", "Codex opens in voice mode, ready to talk."],
+    ["“Hey Claude Code”", "Claude Code starts a new session, already dictating."],
   ];
   const phrase = document.getElementById("phrase");
   const result = document.getElementById("result");

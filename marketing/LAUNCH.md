@@ -15,17 +15,15 @@ Lead with “Hey Chatty”: ChatGPT is the assistant most people know. Say what 
 
 ## The demo video (the most important asset)
 
-A real 15-second screen recording beats any graphic. Record it with ⌘⇧5 and **turn the microphone on** in Options so people hear the phrase.
+Recorded 2026-10-08: **[`docs/demo.mp4`](../docs/demo.mp4)** (53 s, 1920×1248, captions burned in, −16 LUFS), on the site at [notorious-d-e-v.github.io/hey-ai/#demo](https://notorious-d-e-v.github.io/hey-ai/#demo). The README shows [`brand/readme/demo.gif`](../brand/readme/demo.gif), the “Hey Chatty” part, linking to it.
 
-1. Start on a clean desktop with the Hey AI quote mark visible in the menu bar.
-2. Say “Hey Chatty”. ChatGPT opens a new voice chat. Ask one short question and let it answer for a couple of seconds.
-3. Say “stop listening”. The voice chat ends.
-4. Say “Hey Claude Code”, dictate “add a dark mode toggle to the settings page”, pause until the *Done?* bubble appears, then say “yes”. The prompt sends.
-5. End on the menu-bar icon. No talking head, no music, no text overlays beyond the phrase being said.
+The cut, in order:
+1. “Siri and Alexa are taking way too long to become smart. So let's just do this instead.”
+2. The menu, then “Hey Chatty”. ChatGPT's voice pill appears on the desktop. “What's the capital of Indonesia?” “Jakarta.” “Thanks. Stop listening.”
+3. “Hey Claude”, the same question, Claude answers. “stop listening.”
+4. “Hey Claude Code”, then “Can you go ahead and ship dark mode for Hey AI?”. The *Done?* bubble appears, “yes”, and the prompt sends.
 
-Export as MP4 (for X and the README) and a ≤ 10 MB GIF of steps 1–2 (for places that don't autoplay video). Put the MP4 in a GitHub issue comment or release to get a CDN link, then embed it at the top of the README under the banner.
-
-Worth recording a second cut with “Hey Claude” in step 2, for places where Claude users gather (Claude subreddits, Anthropic-focused threads).
+Captions follow the brand: what you say to Hey AI sits in a Highlight pill, and assistant replies are labeled with the assistant's name. X autoplays muted, so they carry the video without sound. Upload `docs/demo.mp4` to X directly (it's under X's 512 MB and 2:20 limits).
 
 ## X post (for @notorious_d_e_v)
 
@@ -33,7 +31,7 @@ Lead with the video. Pick one:
 
 **Proof-led (recommended)**
 
-> “hey chatty” and chatgpt opens in voice mode. a second or two, no clicking
+> “hey chatty” and chatgpt is listening about a second later. no clicking
 >
 > also works for claude, codex and claude code
 >
@@ -63,15 +61,15 @@ Lead with the video. Pick one:
 
 ### Thread (if the first post lands)
 
-1. *(video)* “hey chatty” and chatgpt opens in voice mode. a second or two, no clicking. made it a free mac app
+1. *(video)* “hey chatty” and chatgpt is listening about a second later. no clicking. made it a free mac app
 2. what you can say:
    “hey chatty” for chatgpt voice (chatty is easier to hear than “chatgpt”)
-   “hey codex” for codex voice
+   “hey codex” for the same chatgpt voice chat, which can hand work to codex
    “hey claude” for claude voice
    “hey claude code” for a new session, already dictating
    “stop listening” hangs up whatever's open
 3. claude code has no voice mode, only dictation. so you talk, say “send it”, and hey ai stops dictation, deletes “send it” from the prompt and hits enter. pause for 2 seconds and it asks if you're done. say “yes” and it sends
-4. none of these apps have a “start voice” link. so hey ai opens a new chat, then sends chatgpt's own voice shortcut or presses claude's voice button. it checks the app is still in front before every key press
+4. none of these apps have a “start voice” link. for chatgpt, hey ai presses chatgpt's own voice chat hotkey (it sets one up if you haven't), which works from any app. for claude it opens a new chat and presses the voice button
 5. speech runs on-device through apple's recognizer. nothing is recorded, and no audio leaves your mac unless you turn on the online fallback (off by default). it also ignores wake words while an assistant already has the mic, so talking to chatgpt never opens a second one
 6. install: `curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/install.sh | bash`
    github.com/notorious-d-e-v/hey-ai
@@ -86,13 +84,13 @@ Spend the first 30–60 minutes replying. Good replies to seed: which wake word 
 
 > I talk to ChatGPT and Claude a lot, and clicking around to get into voice mode every time felt silly, so I made a small menu-bar app that listens for a wake phrase and opens the assistant with voice already on.
 >
-> “Hey Chatty” and “Hey Codex” open ChatGPT's and Codex's voice chats, “Hey Claude” opens Claude's voice mode, and “Hey Claude Code” starts a new Claude Code session already dictating. Say “send it” and it sends the prompt. “Stop listening” ends whatever is open. (Chatty because “Hey ChatGPT” is a mouthful and gets misheard.)
+> “Hey Chatty” starts a ChatGPT voice chat (“Hey Codex” starts the same one; its voice agent can hand work to Codex), “Hey Claude” opens Claude's voice mode, and “Hey Claude Code” starts a new Claude Code session already dictating. Say “send it”, or pause and say “yes”, and it sends the prompt. “Stop listening” ends whatever is open. (Chatty because “Hey ChatGPT” is a mouthful and gets misheard.)
 >
-> How it works: Apple's on-device speech recognizer listens for the phrases (nothing is recorded). None of these apps has a “start voice” URL. For ChatGPT and Codex, Hey AI brings the app forward and sends the app's own shortcuts (new chat, then ⌃⇧V for voice). For Claude, it opens claude://claude.ai/new and presses the composer's voice button through the Accessibility API. Claude Code has only dictation, so it opens claude://code/new, toggles dictation with Claude's ⌘D shortcut, and strips “send it” before pressing Return. Every synthetic key press first checks the target app is still frontmost. It also reads Core Audio's per-process input state and ignores wake phrases while an assistant already has the mic.
+> How it works: Apple's on-device speech recognizer listens for the phrases (nothing is recorded). None of these apps has a “start voice” URL. ChatGPT has a global Voice Chat hotkey with no default, so Hey AI sets one (⌃⌥⌘V, one entry in ~/.codex/keybindings.json, unless you already picked one) and presses it; it starts and stops voice from any app. Bringing ChatGPT forward and pressing its in-app shortcut was the first version, and it lost key presses whenever macOS was slow to switch apps. For Claude, it opens claude://claude.ai/new and presses the composer's voice button through the Accessibility API. Claude Code has only dictation, so it opens claude://code/new, toggles dictation with ⌘D, and strips “send it” before pressing Return. Key presses meant for an app first check that the app is frontmost. Core Audio's per-process state does the rest: wake phrases are ignored while an assistant already has the mic, and “stop listening” said over an assistant that's still talking (its voice reaches the mic too) stops it right away.
 >
-> Timing: ChatGPT and Codex are talking one to two seconds after you finish the phrase when the app is already open; Claude's voice mode is usually live in about a second. Listening costs about 3% of one core on an M4 Pro, nearly all of it Apple's recognizer.
+> Timing, from the demo recording: about a second from the end of the phrase to ChatGPT, Claude or Claude Code listening (the voice chat itself starts about 0.4 s after Hey AI recognizes the phrase). Listening costs about 3% of one core on an M4 Pro, nearly all of it Apple's recognizer.
 >
-> Caveats: the app is ad-hoc signed and not notarized yet; releases are built by GitHub Actions with a build attestation. It can't do anything while the Mac is locked.
+> Caveats: the app is ad-hoc signed and not notarized yet; releases are built by GitHub Actions with a build attestation. It can't do anything while the Mac is locked. The first time, ChatGPT needs one restart to pick up the voice hotkey (Hey AI offers to do it).
 >
 > It's Swift, built with just the Command Line Tools, MIT licensed. Install is one curl line, or build from source. Happy to hear what breaks.
 >
@@ -132,6 +130,6 @@ What to watch:
 - [ ] Release `v1.0.0` exists with `Hey-AI.zip`, `Hey-AI.zip.sha256` and an attestation: push the tag (`git tag v1.0.0 && git push origin v1.0.0`) and the Release workflow builds and publishes it.
 - [ ] The install line works on a Mac that has never had Hey AI.
 - [ ] GitHub Pages is on (Settings → Pages → `main` / `docs`) and the site loads.
-- [ ] Demo video recorded and embedded in the README.
+- [x] Demo video recorded and embedded in the README (`brand/readme/demo.gif` → `docs/demo.mp4`).
 - [ ] GoatCounter account created with the site code `heyai` (the site already sends to heyai.goatcounter.com).
 - [ ] Optional: a short domain (for example `heyai.sh`) pointing at the install script, so the command becomes `curl -fsSL heyai.sh | bash`.
