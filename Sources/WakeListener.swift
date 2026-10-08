@@ -24,6 +24,8 @@ final class WakeListener {
     var onSendPhrase: (([String]) -> Void)?
     /// "Stop listening" (or another stop phrase) ended what was heard.
     var onStopPhrase: (() -> Void)?
+    /// Set by the app: true while an assistant app is playing sound, that is, talking.
+    var isAssistantSpeaking: (() -> Bool)?
     /// Show (true) or hide (false) the "Done?" nudge.
     var onNudge: ((Bool) -> Void)?
     /// The send watch timed out or listening stopped.
@@ -379,18 +381,28 @@ final class WakeListener {
     /// fired now.
     private func checkStopPhrase(_ text: String, isFinal: Bool) -> Bool {
         stopTimer?.invalidate()
-        if isWatchingForSend {
-            // Mid-dictation it has to be said on its own, after a pause.
-            let words = WakeMatcher.normalize(text)
-            guard StopPhrase.isWhole(Array(words.dropFirst(min(utteranceStart, words.count)))) else { return false }
-        } else {
-            guard StopPhrase.ends(text) else { return false }
-        }
         let stop = { [weak self] in
             guard let self, self.isRunning else { return }
             self.sendTimer?.invalidate()
             self.onStopPhrase?()
             self.startTask()
+        }
+        if isWatchingForSend {
+            // Mid-dictation it has to be said on its own, after a pause.
+            let words = WakeMatcher.normalize(text)
+            guard StopPhrase.isWhole(Array(words.dropFirst(min(utteranceStart, words.count)))) else { return false }
+        } else {
+            // Said over an assistant that's talking: its voice reaches Hey AI's mic too, and
+            // its next words would land after the phrase and cancel the wait for quiet below.
+            // Words after "stop listening" while it talks are its, so stop now.
+            let ends = StopPhrase.ends(text)
+            guard ends || StopPhrase.nearEnd(text) else { return false }
+            if isAssistantSpeaking?() == true {
+                Log.info("heard “stop listening” while the assistant was talking")
+                stop()
+                return true
+            }
+            guard ends else { return false }
         }
         if isFinal { stop(); return true }
         let changes = heardChanges

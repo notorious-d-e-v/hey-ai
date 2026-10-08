@@ -120,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.sendClaudeCodePrompt(command: command)
         }
         listener.onStopPhrase = { [weak self] in self?.stopListening() }
+        listener.isAssistantSpeaking = { MicActivity.assistantSpeaking() }
         listener.onNudge = { [weak self] show in
             guard let self else { return }
             if show {

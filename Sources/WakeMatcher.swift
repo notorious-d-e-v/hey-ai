@@ -233,6 +233,17 @@ enum StopPhrase {
         return phrases.contains { words.count >= $0.count && Array(words.suffix($0.count)) == $0 }
     }
 
+    /// True when a stop phrase is among the last few words, even with more after it. While
+    /// an assistant is talking, Hey AI's mic hears its voice too, so its next words can land
+    /// after "stop listening" in the transcript.
+    static func nearEnd(_ transcript: String, window: Int = 8) -> Bool {
+        let words = Array(WakeMatcher.normalize(transcript).suffix(window))
+        return phrases.contains { phrase in
+            words.count >= phrase.count
+                && (0...(words.count - phrase.count)).contains { Array(words[$0..<($0 + phrase.count)]) == phrase }
+        }
+    }
+
     /// True when an utterance is nothing but a stop phrase. Used while dictating, so a
     /// prompt that happens to end "…then hang up" doesn't stop it.
     static func isWhole(_ utterance: [String]) -> Bool {
