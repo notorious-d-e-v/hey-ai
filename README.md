@@ -92,6 +92,7 @@ Click the quote mark in the menu bar to pause listening, run any action without 
 - **Nothing happens when I talk.** The menu should say *Listening (on-device)*. If it says on-device speech isn't available, turn on Dictation in **System Settings → Keyboard** so macOS downloads it.
 - **The app opens but voice doesn't start.** Check that Hey AI is switched on under **System Settings → Privacy & Security → Accessibility**. If it is, ChatGPT or Claude may have changed its layout. Choose **Test → Write Claude Controls to Log** and open an issue with the log.
 - **It doesn't work while my Mac is locked.** macOS doesn't let any app drive other apps behind the lock screen. **Keep Screen Awake** stops the display from sleeping so the Mac doesn't lock on its own, which leaves an unattended Mac unlocked.
+- **I can't see the quote mark in the menu bar.** On a MacBook with a notch, macOS hides menu-bar icons behind the notch when there isn't room. Hey AI keeps listening either way. Hold ⌘ and drag a few icons off the menu bar to make room, or open Hey AI from Applications to see its window.
 - **My AirPods sound worse.** While any app holds an AirPods microphone, macOS switches them to call-quality audio. Pick your Mac's built-in microphone as the input.
 
 </details>

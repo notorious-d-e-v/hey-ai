@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let defaults = UserDefaults.standard
     private static let showSetupNotification = Notification.Name("dev.notorious.heyai.showSetup")
+    private static let statusItemName = "HeyAI"
     private var lastStartAttempt = Date.distantPast
 
     /// Held while "Keep Screen Awake" is on.
@@ -75,7 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // New menu-bar icons join at the far left, which is the first place macOS hides
+        // behind the notch when the bar is full. On first launch, start just left of
+        // Control Center instead; after that, wherever the user ⌘-drags it is remembered.
+        let positionKey = "NSStatusItem Preferred Position \(Self.statusItemName)"
+        if defaults.object(forKey: positionKey) == nil { defaults.set(345.0, forKey: positionKey) }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = Self.statusItemName
         menu.delegate = self
         statusItem.menu = menu
 
@@ -134,6 +141,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         Log.info("Hey AI started")
         updateIcon()
+        // A full menu bar can take a few seconds to lay out after launch, and items move
+        // as other apps come and go, so re-check whenever macOS reports a change.
+        if let window = statusItem.button?.window {
+            for name in [NSWindow.didChangeOcclusionStateNotification, NSWindow.didMoveNotification] {
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    self?.checkMenuBarIcon()
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.checkMenuBarIcon() }
 
         setup.isPaused = paused
         setup.onCanListen = { [weak self] in self?.startListeningIfPossible() }
@@ -185,6 +202,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return main
     }
 
+    /// macOS hides menu-bar icons behind the notch when there isn't room, without telling
+    /// anyone. If that happened to ours, say so in setup. Judged by position, not by
+    /// "is it on screen": the whole menu bar is off screen in full-screen apps and while
+    /// recording, and that isn't our icon being crowded out. A crowded-out icon is moved
+    /// to the far left (x = 0) or sits under the notch.
+    private func checkMenuBarIcon() {
+        guard let window = statusItem.button?.window else { return }
+        let hidden = window.frame.minX <= 1 || Self.isUnderNotch(window.frame)
+        guard hidden != setup.menuBarIconHidden else { return }
+        setup.menuBarIconHidden = hidden
+        Log.info(hidden ? "menu-bar icon is hidden (the menu bar is full)" : "menu-bar icon is visible")
+    }
+
+    private static func isUnderNotch(_ frame: NSRect) -> Bool {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }),
+              let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea else { return false }
+        let notch = NSRect(x: left.maxX, y: left.minY, width: right.minX - left.maxX, height: left.height)
+        return frame.intersects(notch)
+    }
+
     // MARK: Setup
 
     @objc private func showSetup() {
@@ -199,6 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         setup.startWatching()
         setupWindow?.present()
+        checkMenuBarIcon()
     }
 
     private func finishSetup() {
