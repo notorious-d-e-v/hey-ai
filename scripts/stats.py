@@ -10,6 +10,7 @@ the repo (traffic isn't public). Data goes to ~/workspace/hey-ai-stats unless
 HEYAI_STATS_DIR says otherwise:
 
     daily.csv      one row per snapshot: installs (zip downloads), stars, forks, watchers, issues
+    test-downloads.txt  how many of those downloads were our own tests (subtracted in reports)
     views.csv      repo views per day (merged from GitHub's rolling 14-day window)
     clones.csv     repo clones per day (same)
     referrers.csv  top referrers over the trailing 14 days, as seen on each snapshot date
@@ -26,8 +27,11 @@ from pathlib import Path
 REPO = os.environ.get("HEYAI_REPO", "notorious-d-e-v/hey-ai")
 DATA = Path(os.environ.get("HEYAI_STATS_DIR", Path.home() / "workspace" / "hey-ai-stats"))
 ZIP = "Hey-AI.zip"
-# Downloads made while testing the release before launch; not real users.
-TEST_DOWNLOADS = int(os.environ.get("HEYAI_TEST_DOWNLOADS", "3"))
+# Downloads made while testing releases; not real users. Kept in the data folder
+# (test-downloads.txt) so it can be bumped after each test install.
+_tests_file = DATA / "test-downloads.txt"
+TEST_DOWNLOADS = int(os.environ.get("HEYAI_TEST_DOWNLOADS")
+                     or (_tests_file.read_text().strip() if _tests_file.exists() else "3"))
 
 # gh lives in Homebrew, which launchd's minimal PATH doesn't include.
 os.environ["PATH"] = os.pathsep.join([os.environ.get("PATH", ""), "/opt/homebrew/bin", "/usr/local/bin"])

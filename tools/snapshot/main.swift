@@ -43,7 +43,7 @@ render(SetupView(model: ready), "setup-3-ready")
 
 let heard = SetupModel()
 heard.microphone = .granted; heard.speech = .granted; heard.accessibility = .granted; heard.isListening = true
-heard.lastHeard = "Heard “Hey Claude”. Opening Claude…"
+heard.lastHeard = "Heard “Hey Chatty”. Opening ChatGPT…"
 render(SetupView(model: heard), "setup-4-heard")
 
 let notListening = SetupModel()

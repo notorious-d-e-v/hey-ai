@@ -10,7 +10,7 @@ You *say* the words, so the brand is built on speech written down. The mark is a
 
 - Write **Hey AI**: two words, capital H, capital A and I.
 - In code, file names and bundle IDs, use `HeyAI` / `heyai`. Never write `HeyAI` in prose.
-- Wake phrases are proper nouns in curly quotes: “Hey Claude”, “Hey Chatty”, “Hey Codex”, “Hey Claude Code”. Lowercase only when quoting a command mid-sentence (“send it”, “stop listening”).
+- Wake phrases are proper nouns in curly quotes: “Hey Chatty”, “Hey Claude”, “Hey Codex”, “Hey Claude Code”. Lead with “Hey Chatty”: ChatGPT is the name most people know. Lowercase only when quoting a command mid-sentence (“send it”, “stop listening”).
 
 ## Logo
 
@@ -67,7 +67,8 @@ Both web fonts are free under the SIL Open Font License.
 
 Write the way you'd tell a friend how to use it.
 
-- **Short and plain.** “Say ‘Hey Claude’. Claude opens, ready to talk.” Not “Unlock seamless voice-first AI workflows.”
+- **Short and plain.** “Say ‘Hey Chatty’. ChatGPT opens, ready to talk.” Not “Unlock seamless voice-first AI workflows.”
+- **Explain Chatty once.** Wherever “Hey Chatty” leads, say what opens right after it (“ChatGPT opens…”), since the nickname isn't obvious.
 - **Use the real phrases.** Show what to say instead of describing it.
 - **Say what happens.** Buttons name their result (“Allow access”, “Copy”). Errors say what went wrong and what to do next, without apologizing.
 - **Sentence case** everywhere. No all-caps labels and no exclamation marks. The one exception is macOS menu items, which follow Apple's Title Case convention so the menu feels native.
