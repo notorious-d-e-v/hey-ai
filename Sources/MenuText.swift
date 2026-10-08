@@ -9,7 +9,7 @@ enum MenuText {
         switch result {
         case _ where result.hasSuffix(": voice chat started"): return "Opened \(name) voice"
         case _ where result.hasSuffix(": asked ChatGPT for a voice chat, but it hasn't started yet"):
-            return "Asked \(name) for a voice chat. If it doesn't start, say “Hey \(name == "Codex" ? "Codex" : "Chatty")” again."
+            return "Asked \(name) for a voice chat. If it hasn't started in 10 seconds, say “Hey \(name == "Codex" ? "Codex" : "Chatty")” again."
         case _ where result.hasSuffix(": still starting the last voice chat"):
             return "\(name) is still starting the last voice chat"
         case _ where result.hasSuffix(": already in a voice chat"):

@@ -197,7 +197,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .unavailable:
             return
         case .yours(let key, true):
-            Log.info("ChatGPT voice hotkey: using yours (\(key))")
+            let added = key == UserDefaults.standard.string(forKey: "chatgptHotkeyAdded")
+            Log.info("ChatGPT voice hotkey: using \(added ? "the one Hey AI added" : "yours") (\(key))")
         case .yours(let key, false):
             Log.info("ChatGPT voice hotkey: yours (\(key)) is a key Hey AI can't press, so it uses ⌃⇧V")
         case .cleared:

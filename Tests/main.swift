@@ -246,9 +246,9 @@ menu("Claude isn't installed", "Claude isn't installed")
 menu("ChatGPT: already in a voice chat", "ChatGPT is already in a voice chat")
 menu("ChatGPT: still starting the last voice chat", "ChatGPT is still starting the last voice chat")
 menu("ChatGPT: asked ChatGPT for a voice chat, but it hasn't started yet",
-     "Asked ChatGPT for a voice chat. If it doesn't start, say “Hey Chatty” again.")
+     "Asked ChatGPT for a voice chat. If it hasn't started in 10 seconds, say “Hey Chatty” again.")
 menu("Codex: asked ChatGPT for a voice chat, but it hasn't started yet",
-     "Asked Codex for a voice chat. If it doesn't start, say “Hey Codex” again.")
+     "Asked Codex for a voice chat. If it hasn't started in 10 seconds, say “Hey Codex” again.")
 
 // ChatGPT's Voice Chat hotkey in ~/.codex/keybindings.json
 func data(_ json: String?) -> Data? { json.map { Data($0.utf8) } }
