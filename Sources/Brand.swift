@@ -21,17 +21,15 @@ enum Brand {
     }
 
     /// A small Highlight pill with Ink text: how the brand marks a phrase you say, sized
-    /// to sit in a menu item. A phrase that does nothing right now gets a quiet gray pill.
-    static func phrasePill(_ text: String, size: CGFloat = 13, inactive: Bool = false, dark: Bool = false) -> NSImage {
+    /// to sit in a menu item.
+    static func phrasePill(_ text: String, size: CGFloat = 13) -> NSImage {
         let font = NSFont.systemFont(ofSize: size, weight: .medium)
-        let ink = inactive ? NSColor(white: dark ? 1 : 0, alpha: 0.35) : nsInk
-        let fill = inactive ? NSColor(white: dark ? 1 : 0, alpha: dark ? 0.12 : 0.07) : nsHighlight
-        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink]
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: nsInk]
         let textSize = (text as NSString).size(withAttributes: attributes)
         let pad = CGSize(width: 5, height: 1)
         let pillSize = NSSize(width: ceil(textSize.width + pad.width * 2), height: ceil(textSize.height + pad.height * 2))
         let image = NSImage(size: pillSize, flipped: false) { bounds in
-            fill.setFill()
+            nsHighlight.setFill()
             NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
             (text as NSString).draw(at: NSPoint(x: pad.width, y: pad.height), withAttributes: attributes)
             return true
