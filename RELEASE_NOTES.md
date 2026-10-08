@@ -1,4 +1,4 @@
-**New in 1.0.15:** “Hey Chatty” is much more reliable. Hey AI now uses ChatGPT's own Voice Chat hotkey, which starts and stops a voice chat from any app, so ChatGPT no longer has to come to the front first. That was the step that kept failing, and stopping a chat early could leave ChatGPT stuck. If you already set that hotkey in ChatGPT, Hey AI uses yours. Otherwise it sets it to ⌃⌥⌘V and offers to restart ChatGPT once so ChatGPT picks it up. “Hey Codex” now starts the same voice chat. When Claude's voice button needs a second press, voice now starts about 1.5 s sooner.
+**New in 1.0.16:** “stop listening” works right away even while ChatGPT or Claude is still talking. Before, the assistant's own voice could hold it up for several seconds, long enough for it to hear “stop listening” and answer.
 
 Say an assistant's name and it opens, ready to talk.
 

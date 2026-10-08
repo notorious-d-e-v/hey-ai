@@ -44,6 +44,15 @@ enum MicActivity {
         assistantsListening().contains(assistant)
     }
 
+    /// True while an assistant app is playing sound: its voice chat is talking.
+    static func assistantSpeaking() -> Bool {
+        guard #available(macOS 14.0, *) else { return false }
+        return processObjects().contains { process in
+            guard isRunning(process, kAudioProcessPropertyIsRunningOutput), let bundleID = bundleID(of: process) else { return false }
+            return all.contains { bundleID.hasPrefix($0.bundlePrefix) }
+        }
+    }
+
     @available(macOS 14.0, *)
     private static func processObjects() -> [AudioObjectID] {
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList,
@@ -59,7 +68,12 @@ enum MicActivity {
 
     @available(macOS 14.0, *)
     private static func isRunningInput(_ process: AudioObjectID) -> Bool {
-        var address = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyIsRunningInput,
+        isRunning(process, kAudioProcessPropertyIsRunningInput)
+    }
+
+    @available(macOS 14.0, *)
+    private static func isRunning(_ process: AudioObjectID, _ selector: AudioObjectPropertySelector) -> Bool {
+        var address = AudioObjectPropertyAddress(mSelector: selector,
                                                  mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)
         var running: UInt32 = 0
