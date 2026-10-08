@@ -1,4 +1,4 @@
-**New in 1.0.8:** “Hey Claude” and the *Done?* bubble no longer wait for you to close the Hey AI menu, and the menu says what happened in plain words (“Opened ChatGPT voice”, “Sent your prompt to Claude Code”).
+**New in 1.0.9:** ChatGPT voice no longer gets stuck on “Voice chat is already starting” when you say “stop listening” quickly or start chats back to back, and “Hey Claude” is caught faster when the recognizer briefly drops the “Hey”.
 
 Say an assistant's name and it opens, ready to talk.
 
