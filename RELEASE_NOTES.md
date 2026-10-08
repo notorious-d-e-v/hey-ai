@@ -1,4 +1,4 @@
-**New in 1.0.12:** saying “stop listening” while dictating to Claude Code no longer leaves “stop listening” typed in the prompt; Hey AI deletes it after dictation stops.
+**New in 1.0.13:** ChatGPT voice is live about 1.5 seconds sooner after “Hey Chatty” (about half a second instead of two), and Codex voice about a second sooner.
 
 Say an assistant's name and it opens, ready to talk.
 

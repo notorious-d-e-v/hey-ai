@@ -39,7 +39,9 @@ final class Launcher {
     func open(_ target: WakeTarget, completion: @escaping (Result) -> Void) {
         queue.async {
             switch target {
-            case .chatgpt: completion(Result(message: self.openVoiceChat(name: "ChatGPT", newChat: (Keys.o, [.maskCommand, .maskAlternate]))))
+            // A voice chat always starts in a new chat of its own, so ChatGPT doesn't need one
+            // opened first. Codex opens a new Codex task to show behind it.
+            case .chatgpt: completion(Result(message: self.openVoiceChat(name: "ChatGPT", newChat: nil)))
             case .codex: completion(Result(message: self.openVoiceChat(name: "Codex", newChat: (Keys.n, .maskCommand))))
             case .claude: completion(Result(message: self.openClaudeVoice()))
             case .claudeCode: completion(self.openClaudeCodeDictation())
@@ -167,8 +169,9 @@ final class Launcher {
 
     // MARK: ChatGPT and Codex
 
-    /// Opens a new chat in the ChatGPT + Codex app with `newChat`, then starts voice (⌃⇧V).
-    private func openVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)) -> String {
+    /// Brings the ChatGPT + Codex app forward and starts voice (⌃⇧V), first opening a new
+    /// chat with `newChat` if given.
+    private func openVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)?) -> String {
         let bundleID = Self.codexBundleID
         guard Self.isInstalled(bundleID) else { return "ChatGPT isn't installed (Hey AI needs the current ChatGPT app)" }
         guard AXIsProcessTrusted() else {
@@ -191,12 +194,16 @@ final class Launcher {
             return "\(name) didn't come to the front"
         }
         // A cold-launched app needs a moment before its shortcuts are wired up.
-        Thread.sleep(forTimeInterval: wasRunning ? 0.3 : 3)
+        Thread.sleep(forTimeInterval: wasRunning ? 0.05 : 3)
 
-        guard Keys.press(newChat.key, flags: newChat.flags, in: bundleID) else {
-            return "\(name): you switched apps, so voice wasn't started"
+        // ⌃⇧V needs a window to land in; with every window closed, open a new chat.
+        let hasWindow = Self.running(bundleID).map { AXReader(pid: $0.processIdentifier).focusedWindow() != nil } ?? false
+        if let newChat = newChat ?? (hasWindow ? nil : (Keys.o, [.maskCommand, .maskAlternate])) {
+            guard Keys.press(newChat.key, flags: newChat.flags, in: bundleID) else {
+                return "\(name): you switched apps, so voice wasn't started"
+            }
+            Thread.sleep(forTimeInterval: 0.4)
         }
-        Thread.sleep(forTimeInterval: 1.0)
         guard Keys.press(Keys.v, flags: [.maskControl, .maskShift], in: bundleID) else {
             return "\(name): you switched apps, so voice wasn't started"
         }
