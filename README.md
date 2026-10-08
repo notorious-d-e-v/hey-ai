@@ -7,6 +7,9 @@
 
 **Say an assistant's name and it opens, ready to talk.** Hey AI is a tiny Mac menu-bar app that listens for *“Hey Chatty”* (ChatGPT), *“Hey Claude”*, *“Hey Codex”* and *“Hey Claude Code”*, and opens that assistant with voice already on. Speech is recognized on your Mac, and nothing is recorded.
 
+<p align="center"><a href="https://notorious-d-e-v.github.io/hey-ai/#demo"><img src="brand/readme/demo.gif" alt="Saying “Hey Chatty” opens a ChatGPT voice chat on the desktop; asked for the capital of Indonesia, ChatGPT says “Jakarta”, then “stop listening” ends it" width="720"></a></p>
+<p align="center"><sub><a href="https://notorious-d-e-v.github.io/hey-ai/#demo">Watch the 53-second demo with sound</a>: ChatGPT, Claude and Claude Code, opened by voice.</sub></p>
+
 ## Install
 
 ```bash

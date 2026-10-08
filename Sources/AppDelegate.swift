@@ -609,7 +609,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let ago = RelativeDateTimeFormatter()
             ago.unitsStyle = .full
             detail = Date().timeIntervalSince(lastActionAt) < 60
-                ? lastAction : "\(lastAction), \(ago.localizedString(for: lastActionAt, relativeTo: Date()))"
+                ? lastAction
+                : "\(lastAction.hasSuffix(".") ? String(lastAction.dropLast()) : lastAction), \(ago.localizedString(for: lastActionAt, relativeTo: Date()))"
         } else {
             detail = nil
         }

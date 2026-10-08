@@ -1,4 +1,4 @@
-**New in 1.0.16:** “stop listening” works right away even while ChatGPT or Claude is still talking. Before, the assistant's own voice could hold it up for several seconds, long enough for it to hear “stop listening” and answer.
+**New in 1.0.17:** a tidier menu (no stray period before “1 minute ago”). Also in this release: the site and README now show the demo.
 
 Say an assistant's name and it opens, ready to talk.
 
