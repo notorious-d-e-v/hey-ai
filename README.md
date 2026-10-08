@@ -18,16 +18,19 @@ curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/install
 
 Paste it into Terminal. About five seconds later Hey AI is in Applications and its setup window is open. Allow three permissions there, then say **“Hey Chatty”**.
 
+**Prefer not to use Terminal?** Download the app instead:
+
+<a href="https://github.com/notorious-d-e-v/hey-ai/releases/latest/download/Hey-AI.zip"><picture><source media="(prefers-color-scheme: dark)" srcset="brand/readme/download-button-dark.png"><img src="brand/readme/download-button-light.png" alt="Download for Mac" width="268" height="56"></picture></a>
+
+1. Drag **Hey AI** from Downloads into Applications.
+2. Open it. The first time, macOS says it can't check it, because Hey AI isn't notarized by Apple yet.
+3. Open **System Settings → Privacy & Security**, click **Open Anyway**, then open Hey AI again.
+
+(Files downloaded with `curl` aren't marked as downloaded, so the Terminal installer doesn't hit that check. That's a convenience, not a security feature. See [Security](#security).)
+
 You need macOS 14 or later (Apple silicon or Intel) and the current [ChatGPT](https://openai.com/chatgpt/download/) desktop app (the one with Codex built in) and/or the [Claude](https://claude.ai/download) desktop app. The older ChatGPT app has no voice mode Hey AI can start.
 
 <p align="center"><img src="brand/readme/setup-ready.png" alt="The Hey AI setup window after the three permissions are allowed, listing the wake phrases" width="420"></p>
-
-<details>
-<summary>Download it yourself instead</summary>
-
-Get `Hey-AI.zip` from [Releases](https://github.com/notorious-d-e-v/hey-ai/releases/latest), unzip it and drag **Hey AI** to Applications. Hey AI isn't notarized by Apple yet, so the first time you open it macOS says it can't check it. Open **System Settings → Privacy & Security** and click **Open Anyway**. (Files downloaded with `curl` aren't marked as downloaded, so the installer doesn't hit this check. That's a convenience, not a security feature. See [Security](#security).)
-
-</details>
 
 ## What you can say
 
