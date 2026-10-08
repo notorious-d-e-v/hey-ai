@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hey AI: say “Hey Claude” and Claude opens, ready to talk</title>
-<meta name="description" content="A free Mac menu-bar app. Say “Hey Claude”, “Hey Chatty”, “Hey Codex” or “Hey Claude Code” and that assistant opens in voice mode. Speech is recognized on your Mac.">
+<title>Hey AI: say “Hey Chatty” and ChatGPT opens, ready to talk</title>
+<meta name="description" content="A free Mac menu-bar app. Say “Hey Chatty”, “Hey Claude”, “Hey Codex” or “Hey Claude Code” and that assistant opens in voice mode. Speech is recognized on your Mac.">
 <meta property="og:title" content="Hey AI">
-<meta property="og:description" content="Say “Hey Claude”. Claude opens, ready to talk. A free Mac app for Claude, ChatGPT and Codex.">
+<meta property="og:description" content="Say “Hey Chatty”. ChatGPT opens, ready to talk. A free Mac app for ChatGPT, Claude and Codex.">
 <meta property="og:image" content="https://notorious-d-e-v.github.io/hey-ai/social-preview.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://notorious-d-e-v.github.io/hey-ai/">
@@ -172,8 +172,8 @@
 
   <main>
     <div class="hero">
-      <h1 class="phrase" id="phrase"><span class="said">“Hey Claude”</span></h1>
-      <p class="result" id="result">Claude opens in voice mode, ready to talk.</p>
+      <h1 class="phrase" id="phrase"><span class="said">“Hey Chatty”</span></h1>
+      <p class="result" id="result">ChatGPT opens in voice mode, ready to talk.</p>
       <p class="what">Hey AI is a free Mac menu-bar app. Say an assistant's name and it opens with voice already on.</p>
 
       <div class="install">
@@ -181,7 +181,7 @@
           <code id="cmd">curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/install.sh | bash</code>
           <button type="button" id="copy">Copy</button>
         </div>
-        <p class="fine">Paste it into Terminal. Needs macOS 14 or later and the <a href="https://claude.ai/download">Claude</a> and/or current <a href="https://openai.com/chatgpt/download/">ChatGPT</a> desktop app. <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/install.sh" data-goatcounter-click="click-read-script">Read the script</a> or <a href="https://github.com/notorious-d-e-v/hey-ai/releases/latest" data-goatcounter-click="click-download-app">download the app</a> yourself.</p>
+        <p class="fine">Paste it into Terminal. Needs macOS 14 or later and the current <a href="https://openai.com/chatgpt/download/">ChatGPT</a> and/or <a href="https://claude.ai/download">Claude</a> desktop app. <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/install.sh" data-goatcounter-click="click-read-script">Read the script</a> or <a href="https://github.com/notorious-d-e-v/hey-ai/releases/latest" data-goatcounter-click="click-download-app">download the app</a> yourself.</p>
       </div>
     </div>
 
@@ -190,7 +190,7 @@
       <ol class="steps">
         <li><h3>Paste one line</h3><p>The installer downloads Hey AI, checks its SHA-256, puts it in Applications and opens it.</p></li>
         <li><h3>Allow three things</h3><p>Microphone, speech recognition and Accessibility, from one window. You only do this once.</p></li>
-        <li><h3>Say “Hey Claude”</h3><p>Claude opens with voice mode on. Talk. Say “stop listening” when you're done.</p></li>
+        <li><h3>Say “Hey Chatty”</h3><p>ChatGPT opens with voice on. Talk. Say “stop listening” when you're done.</p></li>
       </ol>
       <div class="shots">
         <figure><img src="setup-permissions.png" width="480" height="380" alt="The Hey AI setup window asking for microphone, speech recognition and Accessibility, with one Allow access button"><figcaption>One window asks for everything, once.</figcaption></figure>
@@ -201,10 +201,10 @@
     <section aria-labelledby="say">
       <h2 id="say">What you can say</h2>
       <table class="say">
-        <tr><td><span class="spoken">“Hey Claude”</span></td><td><strong>Claude</strong> opens a new chat in voice mode.</td></tr>
-        <tr><td><span class="spoken">“Hey Claude Code”</span></td><td>A new <strong>Claude Code</strong> session starts, already dictating. End with “send it” or pause and say “enter”.</td></tr>
         <tr><td><span class="spoken">“Hey Chatty”</span></td><td><strong>ChatGPT</strong> opens a new voice chat.</td></tr>
         <tr><td><span class="spoken">“Hey Codex”</span></td><td><strong>Codex</strong> opens a new voice chat in your project.</td></tr>
+        <tr><td><span class="spoken">“Hey Claude”</span></td><td><strong>Claude</strong> opens a new chat in voice mode.</td></tr>
+        <tr><td><span class="spoken">“Hey Claude Code”</span></td><td>A new <strong>Claude Code</strong> session starts, already dictating. End with “send it” or pause and say “enter”.</td></tr>
         <tr><td><span class="spoken">“Stop listening”</span></td><td>Ends whatever voice chat is open, right away.</td></tr>
       </table>
     </section>
@@ -214,11 +214,11 @@
       <div class="cols">
         <div>
           <p>Hey AI uses Apple's on-device speech recognition, so your voice stays on your Mac and nothing is recorded. The log keeps only which phrase it heard and what it opened. (An online fallback for Macs without on-device speech exists in the menu, off by default.)</p>
-          <p class="muted">You'll see macOS's orange microphone dot while it listens. Pause it from the menu bar any time. While Claude or ChatGPT is already listening, Hey AI ignores wake phrases, so talking to your assistant never opens a second one.</p>
+          <p class="muted">You'll see macOS's orange microphone dot while it listens. Pause it from the menu bar any time. While ChatGPT or Claude is already listening, Hey AI ignores wake phrases, so talking to your assistant never opens a second one.</p>
         </div>
         <div>
-          <p><strong>Why Accessibility?</strong> Claude and ChatGPT have no “start voice” link. After a wake phrase, Hey AI opens a new chat and either presses the voice button (Claude) or the app's own voice shortcut (ChatGPT, Codex, Claude Code).</p>
-          <p class="muted">Accessibility would let an app read and control any window. Hey AI only touches Claude and ChatGPT, only after a wake phrase, and checks that app is still in front before every key press. The <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/Sources/Launcher.swift">code</a> is short.</p>
+          <p><strong>Why Accessibility?</strong> ChatGPT and Claude have no “start voice” link. After a wake phrase, Hey AI opens a new chat and either sends the app's own voice shortcut (ChatGPT, Codex, Claude Code) or presses the voice button (Claude).</p>
+          <p class="muted">Accessibility would let an app read and control any window. Hey AI only touches ChatGPT and Claude, only after a wake phrase, and checks that app is still in front before every key press. The <a href="https://github.com/notorious-d-e-v/hey-ai/blob/main/Sources/Launcher.swift">code</a> is short.</p>
         </div>
       </div>
     </section>
@@ -241,15 +241,15 @@
   <footer>
     <p>Hey AI is free and open source under the MIT license. <a href="https://github.com/notorious-d-e-v/hey-ai" data-goatcounter-click="click-github-footer">Source on GitHub</a>.</p>
     <p>This site counts visits with <a href="https://www.goatcounter.com">GoatCounter</a>: no cookies, nothing personal. The app itself sends nothing.</p>
-    <p>Claude and Claude Code are trademarks of Anthropic. ChatGPT and Codex are trademarks of OpenAI. Hey AI is an independent project.</p>
+    <p>ChatGPT and Codex are trademarks of OpenAI. Claude and Claude Code are trademarks of Anthropic. Hey AI is an independent project.</p>
   </footer>
 </div>
 
 <script>
   // The one moving part: the hero cycles through the phrases you can say.
   const phrases = [
-    ["“Hey Claude”", "Claude opens in voice mode, ready to talk."],
     ["“Hey Chatty”", "ChatGPT opens in voice mode, ready to talk."],
+    ["“Hey Claude”", "Claude opens in voice mode, ready to talk."],
     ["“Hey Codex”", "Codex opens in voice mode, ready to talk."],
   ];
   const phrase = document.getElementById("phrase");

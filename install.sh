@@ -75,7 +75,7 @@ main() {
     say "${bold}Hey AI is updated${reset} and running. Its quote mark is in your menu bar."
   else
     say "${bold}Hey AI is installed${reset} in $dest."
-    say "Allow the three permissions in the window that just opened, then say ${bold}“Hey Claude”${reset}."
+    say "Allow the three permissions in the window that just opened, then say ${bold}“Hey Chatty”${reset}."
   fi
 }
 

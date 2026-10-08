@@ -232,7 +232,7 @@ private struct PermissionsView: View {
             PermissionRow(step: 2, title: "Speech recognition", detail: "Turns what you say into text, on this Mac.",
                           status: model.speech)
             PermissionRow(step: 3, title: "Accessibility",
-                          detail: "Lets Hey AI open a new chat and press the voice button in Claude and ChatGPT.",
+                          detail: "Lets Hey AI open a new chat and start voice in ChatGPT and Claude.",
                           status: model.accessibility)
 
             if model.speech == .granted && !model.onDeviceSpeech {
@@ -308,12 +308,6 @@ private struct ReadyView: View {
             StatusLine(model: model)
                 .padding(.bottom, 16)
 
-            if Assistants.claude {
-                PhraseRow(phrase: "Hey Claude", opens: "Claude, in voice mode")
-                PhraseRow(phrase: "Hey Claude Code", opens: "A new Claude Code session, dictating")
-            } else {
-                MissingRow(text: "Claude isn't installed.", link: "Get Claude", url: "https://claude.ai/download")
-            }
             if Assistants.chatGPT {
                 PhraseRow(phrase: "Hey Chatty", opens: "ChatGPT, in voice mode")
                 PhraseRow(phrase: "Hey Codex", opens: "Codex, in voice mode")
@@ -322,6 +316,12 @@ private struct ReadyView: View {
                            url: "https://openai.com/chatgpt/download/")
             } else {
                 MissingRow(text: "ChatGPT isn't installed.", link: "Get ChatGPT", url: "https://openai.com/chatgpt/download/")
+            }
+            if Assistants.claude {
+                PhraseRow(phrase: "Hey Claude", opens: "Claude, in voice mode")
+                PhraseRow(phrase: "Hey Claude Code", opens: "A new Claude Code session, dictating")
+            } else {
+                MissingRow(text: "Claude isn't installed.", link: "Get Claude", url: "https://claude.ai/download")
             }
 
             PhraseRow(phrase: "stop listening", opens: "Ends a voice chat", compact: true)
