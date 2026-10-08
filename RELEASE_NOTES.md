@@ -1,4 +1,4 @@
-**New in 1.0.13:** ChatGPT voice is live about 1.5 seconds sooner after “Hey Chatty” (about half a second instead of two), and Codex voice about a second sooner.
+**New in 1.0.14:** ChatGPT voice is steadier when ChatGPT is slow to connect (right after it updates, say): Hey AI keeps waiting instead of giving up, never asks twice, and stops a chat cleanly even right after it starts. And “stop listening” stops the voice chat Hey AI opened, not your own dictation in another app.
 
 Say an assistant's name and it opens, ready to talk.
 

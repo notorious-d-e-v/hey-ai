@@ -243,6 +243,9 @@ menu("Claude: stopped listening", "Ended the Claude voice chat")
 menu("Claude Code: stopped listening", "Stopped dictating to Claude Code. Nothing was sent.")
 menu("Claude isn't installed", "Claude isn't installed")
 menu("ChatGPT: already in a voice chat", "ChatGPT is already in a voice chat")
+menu("ChatGPT: voice chat is still connecting", "ChatGPT voice is still connecting…")
+menu("ChatGPT: still connecting the last voice chat", "ChatGPT is still connecting the last voice chat")
+menu("ChatGPT: voice chat connected after 11 s", "Opened ChatGPT voice (it took 11 s to connect)")
 menu("ChatGPT: voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT.",
      "ChatGPT's voice chat didn't start. If it says it's already starting, quit and reopen ChatGPT.")
 

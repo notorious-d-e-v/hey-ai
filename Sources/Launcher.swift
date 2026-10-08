@@ -25,7 +25,12 @@ final class Launcher {
         var awaitingSend = false
         /// Screen frame (top-left origin) of the Claude Code prompt box, for the nudge.
         var anchor: CGRect?
+        /// ChatGPT voice is still connecting; `onChatGPTConnectFinished` reports how it ends.
+        var connecting = false
     }
+
+    /// Called (off the main thread) when a slow ChatGPT voice start finally connects or gives up.
+    var onChatGPTConnectFinished: ((String) -> Void)?
 
     private let queue = DispatchQueue(label: "heyai.launcher")
     private let monitorQueue = DispatchQueue(label: "heyai.dictation-monitor")
@@ -34,6 +39,10 @@ final class Launcher {
     private var dictationTimer: DispatchSourceTimer?
     /// When Hey AI last stopped a ChatGPT voice chat. Only touched on `queue`.
     private var chatgptStoppedAt = Date.distantPast
+    /// Set while a slow ChatGPT voice start is still connecting. Only touched on `queue`.
+    private var chatgptConnectingSince: Date?
+    /// When a ChatGPT voice chat Hey AI started took the mic. Only touched on `queue`.
+    private var chatgptLiveSince: Date?
 
     /// Runs off the main thread; `completion` gets a one-line result for the menu and log.
     func open(_ target: WakeTarget, completion: @escaping (Result) -> Void) {
@@ -41,8 +50,8 @@ final class Launcher {
             switch target {
             // A voice chat always starts in a new chat of its own, so ChatGPT doesn't need one
             // opened first. Codex opens a new Codex task to show behind it.
-            case .chatgpt: completion(Result(message: self.openVoiceChat(name: "ChatGPT", newChat: nil)))
-            case .codex: completion(Result(message: self.openVoiceChat(name: "Codex", newChat: (Keys.n, .maskCommand))))
+            case .chatgpt: completion(self.openVoiceChat(name: "ChatGPT", newChat: nil))
+            case .codex: completion(self.openVoiceChat(name: "Codex", newChat: (Keys.n, .maskCommand)))
             case .claude: completion(Result(message: self.openClaudeVoice()))
             case .claudeCode: completion(self.openClaudeCodeDictation())
             }
@@ -104,7 +113,14 @@ final class Launcher {
     /// queue runs one thing at a time) and stops the chat only if it came up.
     func endChatGPTVoiceOnceStarted(completion: @escaping (String?) -> Void) {
         queue.async {
-            completion(MicActivity.assistantListening() == .chatgpt ? self.endVoiceNow(.chatgpt) : nil)
+            if MicActivity.isListening(.chatgpt) { return completion(self.endVoiceNow(.chatgpt)) }
+            // Still connecting slowly: wait for it off the queue, so other assistants aren't held up.
+            guard let since = self.chatgptConnectingSince else { return completion(nil) }
+            let remaining = Self.chatgptConnectLimit - Date().timeIntervalSince(since)
+            DispatchQueue.global().async {
+                guard remaining > 0, Self.waitForChatGPTMic(timeout: remaining) else { return completion(nil) }
+                self.queue.async { completion(self.endVoiceNow(.chatgpt)) }
+            }
         }
     }
 
@@ -171,7 +187,14 @@ final class Launcher {
 
     /// Brings the ChatGPT + Codex app forward and starts voice (⌃⇧V), first opening a new
     /// chat with `newChat` if given.
-    private func openVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)?) -> String {
+    private func openVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)?) -> Result {
+        // `connecting` only when this call began the slow start, so each one is counted once.
+        let before = chatgptConnectingSince
+        let message = startVoiceChat(name: name, newChat: newChat)
+        return Result(message: message, connecting: chatgptConnectingSince != nil && chatgptConnectingSince != before)
+    }
+
+    private func startVoiceChat(name: String, newChat: (key: CGKeyCode, flags: CGEventFlags)?) -> String {
         let bundleID = Self.codexBundleID
         guard Self.isInstalled(bundleID) else { return "ChatGPT isn't installed (Hey AI needs the current ChatGPT app)" }
         guard AXIsProcessTrusted() else {
@@ -180,9 +203,14 @@ final class Launcher {
         }
         // One voice chat at a time. ChatGPT holds a lock while a voice chat starts, and
         // asking for another before it lets go fails with "Voice chat is already starting".
-        if MicActivity.assistantListening() == .chatgpt {
+        if MicActivity.isListening(.chatgpt) {
             Self.activate(bundleID)
             return "\(name): already in a voice chat"
+        }
+        // A slow start from a moment ago may still connect; asking again would collide with it.
+        if let since = chatgptConnectingSince, Date().timeIntervalSince(since) < Self.chatgptConnectLimit {
+            Self.activate(bundleID)
+            return "\(name): still connecting the last voice chat"
         }
         // A chat that was just stopped takes a moment to wind down inside ChatGPT.
         let sinceStop = Date().timeIntervalSince(chatgptStoppedAt)
@@ -209,19 +237,39 @@ final class Launcher {
         }
         // Wait until the chat has the microphone. The launcher runs one thing at a time, so a
         // second "Hey Chatty" or a "stop listening" waits here instead of landing mid-start.
-        if Self.waitForChatGPTMic(timeout: 6) { return "\(name): new chat + voice shortcut sent" }
-        // Usually ChatGPT is stuck on an earlier voice chat: it can hold its start lock until
-        // it quits, and every new chat fails with "Voice chat is already starting".
-        return "\(name): voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT."
+        if Self.waitForChatGPTMic(timeout: 2) { chatgptLiveSince = Date(); return "\(name): new chat + voice shortcut sent" }
+        // ChatGPT can take 10 seconds or more, say right after it updates. Keep watching
+        // without holding up other assistants, and don't ask it again in the meantime.
+        let since = Date()
+        chatgptConnectingSince = since
+        DispatchQueue.global().async {
+            let connected = Self.waitForChatGPTMic(timeout: Self.chatgptConnectLimit - 2)
+            let liveAt = Date()
+            let waited = Int(liveAt.timeIntervalSince(since).rounded()) + 2
+            self.queue.async {
+                if self.chatgptConnectingSince == since { self.chatgptConnectingSince = nil }
+                if connected { self.chatgptLiveSince = liveAt }
+                // Usually when it never connects, ChatGPT is stuck on an earlier voice chat: it
+                // can hold its start lock until it quits ("Voice chat is already starting").
+                self.onChatGPTConnectFinished?(connected
+                    ? "\(name): voice chat connected after \(waited) s"
+                    : "\(name): voice chat didn't start. If ChatGPT says it's already starting, quit and reopen ChatGPT.")
+            }
+        }
+        return "\(name): voice chat is still connecting"
     }
 
     /// Gap between stopping a ChatGPT voice chat and starting the next one.
     private static let chatgptRestartGap: TimeInterval = 2
+    /// How long a ChatGPT voice start gets to connect before Hey AI gives up on it.
+    private static let chatgptConnectLimit: TimeInterval = 15
+    /// How long after ChatGPT takes the mic before a stop is honored.
+    private static let chatgptSettle: TimeInterval = 2
 
     private static func waitUntilNotListening(_ assistant: MicActivity.Assistant, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if MicActivity.assistantListening() != assistant { return true }
+            if !MicActivity.isListening(assistant) { return true }
             Thread.sleep(forTimeInterval: 0.15)
         }
         return false
@@ -230,7 +278,7 @@ final class Launcher {
     private static func waitForChatGPTMic(timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if MicActivity.assistantListening() == .chatgpt { return true }
+            if MicActivity.isListening(.chatgpt) { return true }
             Thread.sleep(forTimeInterval: 0.15)
         }
         return false
@@ -417,7 +465,13 @@ final class Launcher {
             // ⌃⇧V starts *or stops* the voice chat; it only reaches the app when it's in front.
             // Hey AI only gets here once the chat has the microphone, so it stops. (Pressed
             // while a chat is still starting, it would ask for a second one instead.)
-            defer { chatgptStoppedAt = Date() }
+            defer { chatgptStoppedAt = Date(); chatgptLiveSince = nil }
+            // ChatGPT takes the mic about 1.5 s before its session is up, and ignores a stop
+            // in between; wait until the chat it started has had a moment.
+            if let live = chatgptLiveSince {
+                let wait = Self.chatgptSettle - Date().timeIntervalSince(live)
+                if wait > 0 { Thread.sleep(forTimeInterval: wait) }
+            }
             Self.activate(Self.codexBundleID)
             guard Self.waitUntilFrontmost(Self.codexBundleID, timeout: 4) else {
                 return "ChatGPT didn't come to the front to stop voice"
@@ -430,7 +484,7 @@ final class Launcher {
         }
         for _ in 0..<15 {
             Thread.sleep(forTimeInterval: 0.2)
-            if MicActivity.assistantListening() != assistant { return "\(name): stopped listening" }
+            if !MicActivity.isListening(assistant) { return "\(name): stopped listening" }
         }
         return "\(name): asked it to stop, but it's still using the microphone"
     }

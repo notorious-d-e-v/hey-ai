@@ -20,15 +20,28 @@ enum MicActivity {
         }
     }
 
+    static let all: [Assistant] = [.claude, .chatgpt, .chatgptClassic]
+
     /// An assistant app that is using the microphone right now, if any.
     static func assistantListening() -> Assistant? {
-        guard #available(macOS 14.0, *) else { return nil }
-        let all: [Assistant] = [.claude, .chatgpt, .chatgptClassic]
+        let listening = assistantsListening()
+        return all.first { listening.contains($0) }
+    }
+
+    /// Every assistant app using the microphone right now. Two can at once, say a ChatGPT
+    /// voice chat while you dictate to Claude.
+    static func assistantsListening() -> Set<Assistant> {
+        guard #available(macOS 14.0, *) else { return [] }
+        var found: Set<Assistant> = []
         for process in processObjects() where isRunningInput(process) {
             guard let bundleID = bundleID(of: process) else { continue }
-            if let match = all.first(where: { bundleID.hasPrefix($0.bundlePrefix) }) { return match }
+            if let match = all.first(where: { bundleID.hasPrefix($0.bundlePrefix) }) { found.insert(match) }
         }
-        return nil
+        return found
+    }
+
+    static func isListening(_ assistant: Assistant) -> Bool {
+        assistantsListening().contains(assistant)
     }
 
     @available(macOS 14.0, *)
