@@ -113,6 +113,18 @@ enum WakeMatcher {
         }.filter { !$0.isEmpty }
     }
 
+    /// Where the speech after a pause starts in the recognizer's new transcript. Usually the
+    /// transcript grows (maybe re-hearing its last word) and the new words follow the old
+    /// ones; but after a pause it can also start over with only the new speech, "Yes".
+    static func utteranceStart(previous: [String], current: [String]) -> Int {
+        let shared = zip(previous, current).prefix { $0 == $1 }.count
+        // A short transcript has to be kept whole, or "and also" → "and press enter" would
+        // look like it grew by "press enter".
+        let kept = previous.count >= 3 ? previous.count - 1 : previous.count
+        if current.count >= previous.count && shared >= kept { return previous.count }
+        return 0
+    }
+
     static func levenshtein(_ a: String, _ b: String) -> Int {
         let a = Array(a), b = Array(b)
         if a.isEmpty { return b.count }

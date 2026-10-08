@@ -98,6 +98,38 @@ expectCommand("fix the failing test yeah", utterance: "yeah", nudged: true, "yea
 expectCommand("fix the failing test yes and also the lint", utterance: "yes and also the lint", nil)
 expectCommand("fix the failing test yes and also the lint", utterance: "yes and also the lint", nudged: true, nil)
 
+// Where the speech after a pause starts, and what that means for a send command.
+func expectStart(_ previous: String, _ current: String, _ expected: Int) {
+    let got = WakeMatcher.utteranceStart(previous: words(previous), current: words(current))
+    check(got == expected, "utteranceStart(\"\(previous)\" → \"\(current)\") → \(got), expected \(expected)")
+}
+
+let dictated = "Check WiFi is still not accepting my command after I say yes and I wanted to send the chat"
+expectStart("", "Yes", 0)
+expectStart(dictated, dictated + " yes", 19)
+expectStart(dictated, "Yes", 0) // macOS starts the transcript over after a pause
+expectStart("Yes I want you to fix the tests", "Yes", 0)
+expectStart("fix the failing test", "fix the failing tests", 4) // re-heard its last word
+expectStart("fix the failing test", "fix the failing tests yes", 4)
+expectStart("fix the failing test", "and also the lint", 0)
+expectStart("okay", "enter", 0)
+expectStart("and also", "and press", 0)
+
+func expectReply(_ previous: String, _ current: String, nudged: Bool = true, _ expected: String?) {
+    let all = words(current)
+    let utterance = Array(all.dropFirst(WakeMatcher.utteranceStart(previous: words(previous), current: all)))
+    let got = SendPhrase.command(words: all, utterance: utterance, nudged: nudged)
+    check(got == expected.map(words), "reply \"\(current)\" after \"\(previous)\" → \(got?.joined(separator: " ") ?? "nil"), expected \(expected ?? "nil")")
+}
+
+expectReply(dictated, "Yes", "yes")
+expectReply(dictated, "Yes", nudged: false, "yes")
+expectReply(dictated, "yeah", "yeah")
+expectReply(dictated, dictated + " yes", "yes")
+expectReply(dictated, "enter", "enter")
+expectReply(dictated, "and also fix the lint", nil)
+expectReply(dictated, "and then press enter", nil)
+
 func expectStrip(_ text: String, _ command: String, _ expected: String) {
     let got = SendPhrase.strip(text, command: words(command))
     check(got == expected, "strip(\"\(text)\", \"\(command)\") → \"\(got)\", expected \"\(expected)\"")
