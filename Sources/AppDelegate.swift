@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// ChatGPT voice chats Hey AI has asked for that haven't finished starting.
     private var chatgptStarts = 0
     private var chatgptStarting: Bool { chatgptStarts > 0 }
+    /// The assistant whose voice chat Hey AI opened last.
+    private var lastOpenedAssistant: MicActivity.Assistant?
     private var flashUntil = Date.distantPast
 
     private let defaults = UserDefaults.standard
@@ -121,6 +123,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.sendClaudeCodePrompt(command: command)
         }
         listener.onStopPhrase = { [weak self] in self?.stopListening() }
+        launcher.onChatGPTConnectFinished = { [weak self] result in
+            Log.info(result)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.chatgptStarts = max(0, self.chatgptStarts - 1)
+                self.report(result)
+            }
+        }
         listener.onNudge = { [weak self] show in
             guard let self else { return }
             if show {
@@ -291,11 +301,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let startsChatGPTVoice = target == .chatgpt || target == .codex
         if startsChatGPTVoice { chatgptStarts += 1 }
+        switch target {
+        case .chatgpt, .codex: lastOpenedAssistant = .chatgpt
+        case .claude: lastOpenedAssistant = .claude
+        case .claudeCode: lastOpenedAssistant = nil
+        }
         launcher.open(target) { [weak self] result in
             Log.info(result.message)
             DispatchQueue.main.async {
                 guard let self else { return }
-                if startsChatGPTVoice { self.chatgptStarts -= 1 }
+                // A slow ChatGPT start keeps counting until onChatGPTConnectFinished.
+                if startsChatGPTVoice && !result.connecting { self.chatgptStarts -= 1 }
                 self.report(result.message)
                 if result.awaitingSend {
                     self.nudgeAnchor = result.anchor
@@ -349,7 +365,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return
         }
-        guard let assistant = MicActivity.assistantListening() else {
+        // Prefer the voice chat Hey AI opened last: another app with the mic may be your own
+        // dictation (say, into Claude) that "stop listening" shouldn't touch.
+        let listening = MicActivity.assistantsListening()
+        let opened = lastOpenedAssistant.flatMap { listening.contains($0) ? $0 : nil }
+        let startingChatGPT = chatgptStarting && !listening.contains(.chatgpt)
+        guard let assistant = opened ?? (startingChatGPT ? nil : MicActivity.all.first(where: listening.contains)) else {
             // A ChatGPT voice chat Hey AI is still starting doesn't have the mic yet.
             guard chatgptStarting else { return }
             Log.info("heard “stop listening” while ChatGPT voice is starting → stop it once it starts")

@@ -11,6 +11,13 @@ enum MenuText {
         switch result {
         case _ where result.hasSuffix("quit and reopen ChatGPT."):
             return "ChatGPT's voice chat didn't start. If it says it's already starting, quit and reopen ChatGPT."
+        case _ where result.hasSuffix(": voice chat is still connecting"):
+            return "\(result.prefix { $0 != ":" }) voice is still connecting…"
+        case _ where result.hasSuffix(": still connecting the last voice chat"):
+            return "\(result.prefix { $0 != ":" }) is still connecting the last voice chat"
+        case _ where result.contains(": voice chat connected after "):
+            let name = result.prefix { $0 != ":" }
+            return "Opened \(name) voice (it took \(result.split(separator: " ").suffix(2).joined(separator: " ")) to connect)"
         case _ where result.hasSuffix(": already in a voice chat"):
             return "\(result.prefix { $0 != ":" }) is already in a voice chat"
         case _ where result.hasPrefix("Claude: voice mode started"): return "Opened Claude voice"
