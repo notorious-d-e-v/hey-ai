@@ -137,7 +137,7 @@ enum SendPhrase {
     static let anywhere = phrases(["send it", "sent it", "send that", "send message", "send the message"])
     /// Send only when said on their own after a pause, so "…and press enter" can't fire.
     static let standalone = phrases([
-        "enter", "send", "submit", "done", "i'm done", "press enter", "hit enter", "go ahead",
+        "yes", "enter", "send", "submit", "done", "i'm done", "press enter", "hit enter", "go ahead",
         "that's it", "that's all",
     ])
     /// Answers to the "Done?" nudge. They can also lead a phrase: "yes, send it".
@@ -152,6 +152,7 @@ enum SendPhrase {
     /// - nudged: the utterance began after the "Done?" nudge appeared
     static func command(words: [String], utterance: [String], nudged: Bool) -> [String]? {
         if !utterance.isEmpty {
+            if standalone.contains(utterance) || anywhere.contains(utterance) { return utterance }
             let answer = answers.first { utterance.starts(with: $0) } ?? []
             let rest = Array(utterance.dropFirst(answer.count))
             if !rest.isEmpty && (anywhere.contains(rest) || standalone.contains(rest)) { return utterance }

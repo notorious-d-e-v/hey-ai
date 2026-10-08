@@ -234,7 +234,7 @@ final class Launcher {
         reader.focus(composer.textArea.element)
         let idle = reader.micState(composer.micButton)
         Log.info("Claude Code: mic button \(idle) before dictation")
-        let dictating = Result(message: "Claude Code: dictating. Say “send it” or “enter” to send.",
+        let dictating = Result(message: "Claude Code: dictating. Say “yes” or “send it” to send.",
                                awaitingSend: true, anchor: composer.textArea.frame)
         codeSession = (reader, composer)
         if idle.isRecording { return dictating }

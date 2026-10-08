@@ -33,7 +33,7 @@ Get `Hey-AI.zip` from [Releases](https://github.com/notorious-d-e-v/hey-ai/relea
 | **“Hey Chatty”** | ChatGPT opens a new voice chat. |
 | **“Hey Codex”** | Codex opens a new voice chat in your current project. |
 | **“Hey Claude”** | Claude opens a new chat in voice mode. |
-| **“Hey Claude Code”** | A new Claude Code session opens in the Claude app, already dictating. Finish with **“send it”**, or pause and say **“enter”**. |
+| **“Hey Claude Code”** | A new Claude Code session opens in the Claude app, already dictating. Finish with **“send it”**, or pause and say **“yes”**. |
 | **“Stop listening”** | Ends whatever voice chat is open, right away. |
 
 While ChatGPT or Claude is already listening, Hey AI ignores wake phrases, so talking to your assistant never opens a second one.
@@ -43,8 +43,8 @@ While ChatGPT or Claude is already listening, Hey AI ignores wake phrases, so ta
 Claude Code has dictation rather than a voice conversation, so you speak your prompt and then send it:
 
 - End with **“send it”** (or “send that”). It sends after a second of quiet.
-- Or pause, then say **“enter”**, “send” or “done” on its own. A prompt that ends “…and press enter” won't send.
-- Pause for two seconds and a small bubble asks *Done?* A plain **“yes”** sends.
+- Or pause, then say **“yes”** (or “enter”, “send”, “done”) on its own. A prompt that ends “…and press enter” won't send.
+- Pause for two seconds and a small bubble asks *Done? Say yes to send.* “Yeah” and “okay” work then too.
 - If Claude ends the dictation itself (its own timeout, or you click its mic button), Hey AI sends what's there.
 
 Hey AI removes the spoken command from the prompt before pressing Return. A pause on its own doesn't send unless Claude ends the dictation. If you switch to another app before it sends, it stops and sends nothing.

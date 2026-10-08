@@ -91,7 +91,11 @@ expectCommand("fix the failing test yes send it", utterance: "yes send it", "yes
 expectCommand("and then press enter", nil)
 expectCommand("and then press enter", utterance: "and then press enter", nil)
 expectCommand("fix the failing test yes", utterance: "yes", nudged: true, "yes")
-expectCommand("fix the failing test yes", utterance: "yes", nil)
+expectCommand("fix the failing test yes", utterance: "yes", "yes")
+expectCommand("fix the failing test Yes.", utterance: "Yes.", "Yes.")
+expectCommand("fix the failing test yeah", utterance: "yeah", nil)
+expectCommand("fix the failing test yeah", utterance: "yeah", nudged: true, "yeah")
+expectCommand("fix the failing test yes and also the lint", utterance: "yes and also the lint", nil)
 expectCommand("fix the failing test yes and also the lint", utterance: "yes and also the lint", nudged: true, nil)
 
 func expectStrip(_ text: String, _ command: String, _ expected: String) {

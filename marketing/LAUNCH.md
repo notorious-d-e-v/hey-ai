@@ -20,7 +20,7 @@ A real 15-second screen recording beats any graphic. Record it with ⌘⇧5 and 
 1. Start on a clean desktop with the Hey AI quote mark visible in the menu bar.
 2. Say “Hey Chatty”. ChatGPT opens a new voice chat. Ask one short question and let it answer for a couple of seconds.
 3. Say “stop listening”. The voice chat ends.
-4. Say “Hey Claude Code”, dictate “add a dark mode toggle to the settings page”, then say “send it”. The prompt sends.
+4. Say “Hey Claude Code”, dictate “add a dark mode toggle to the settings page”, pause until the *Done?* bubble appears, then say “yes”. The prompt sends.
 5. End on the menu-bar icon. No talking head, no music, no text overlays beyond the phrase being said.
 
 Export as MP4 (for X and the README) and a ≤ 10 MB GIF of steps 1–2 (for places that don't autoplay video). Put the MP4 in a GitHub issue comment or release to get a CDN link, then embed it at the top of the README under the banner.
@@ -70,7 +70,7 @@ Lead with the video. Pick one:
    “hey claude” for claude voice
    “hey claude code” for a new session, already dictating
    “stop listening” hangs up whatever's open
-3. claude code has no voice mode, only dictation. so you talk, say “send it”, and hey ai stops dictation, deletes “send it” from the prompt and hits enter. pause for 2 seconds and it asks if you're done
+3. claude code has no voice mode, only dictation. so you talk, say “send it”, and hey ai stops dictation, deletes “send it” from the prompt and hits enter. pause for 2 seconds and it asks if you're done. say “yes” and it sends
 4. none of these apps have a “start voice” link. so hey ai opens a new chat, then sends chatgpt's own voice shortcut or presses claude's voice button. it checks the app is still in front before every key press
 5. speech runs on-device through apple's recognizer. nothing is recorded, and no audio leaves your mac unless you turn on the online fallback (off by default). it also ignores wake words while an assistant already has the mic, so talking to chatgpt never opens a second one
 6. install: `curl -fsSL https://raw.githubusercontent.com/notorious-d-e-v/hey-ai/main/install.sh | bash`
