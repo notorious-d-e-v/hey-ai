@@ -87,6 +87,7 @@ One moment: when a phrase appears, the highlighter sweeps in from left to right 
 - The menu-bar icon is the mark, drawn as a template image so macOS tints it. States: listening (mark), heard you (mark knocked out of a filled pill), dictating to Claude Code (smaller mark plus a dot), paused (dimmed mark with a slash).
 - The setup window is Paper with Ink type. Steps are numbered because they happen in order, and each turns into an Ink circle with a Highlight check when it's done. Wake phrases appear as Highlight pills.
 - The “Done?” nudge uses the same rule: Ink text on white, with “yes” highlighted.
+- The menu-bar menu opens the way macOS's own menus name their app: the app icon and the wordmark, the version, and a status dot with what Hey AI is doing. Below that, each phrase is a Highlight pill followed by what it opens, and clicking the row does the same thing as saying it. A phrase that would do nothing right now (“stop listening” with nothing listening) gets a quiet gray pill. Everything else is a plain native menu item.
 - Status dots: a filled Signal dot means listening; a hollow Graphite ring means it isn't.
 
 ## Other companies' names

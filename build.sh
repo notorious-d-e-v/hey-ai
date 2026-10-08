@@ -11,7 +11,7 @@ swiftc -O -swift-version 5 Sources/WakeMatcher.swift Tests/main.swift -o build/m
 echo "· compiling Hey AI (Apple silicon + Intel)"
 SOURCES=(Sources/main.swift Sources/AppDelegate.swift Sources/WakeListener.swift Sources/WakeMatcher.swift
   Sources/Launcher.swift Sources/NudgePanel.swift Sources/MicActivity.swift Sources/Brand.swift
-  Sources/Setup.swift Sources/Log.swift)
+  Sources/Setup.swift Sources/MenuHeader.swift Sources/Log.swift)
 FRAMEWORKS=(-framework AppKit -framework SwiftUI -framework AVFoundation -framework Speech -framework CoreAudio
   -framework ApplicationServices -framework ServiceManagement -framework IOKit)
 pids=()
