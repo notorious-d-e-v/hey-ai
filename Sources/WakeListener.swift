@@ -252,10 +252,16 @@ final class WakeListener {
             let text = result.bestTranscription.formattedString
             onHeard?(text)
             if text != lastHeardText {
-                // A final result that rewords what was already heard is a revision, not new speech.
+                // After a pause the recognizer may start its transcript over with just the new
+                // speech ("Yes"), so where the utterance starts comes from comparing the two. A
+                // final result that rewords what was already heard is a revision, not new
+                // speech; one that's shorter because it started over is.
                 let paused = Date().timeIntervalSince(lastHeardChange) >= Self.utterancePause
-                if lastHeardText.isEmpty || (paused && !result.isFinal) {
-                    utteranceStart = WakeMatcher.normalize(lastHeardText).count
+                let before = WakeMatcher.normalize(lastHeardText), now = WakeMatcher.normalize(text)
+                let start = WakeMatcher.utteranceStart(previous: before, current: now)
+                let restarted = start == 0 && now.count < before.count
+                if lastHeardText.isEmpty || (paused && (!result.isFinal || restarted)) {
+                    utteranceStart = start
                     utteranceStartedAt = Date()
                 }
                 lastHeardText = text
