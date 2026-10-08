@@ -9,22 +9,38 @@ import Foundation
 enum ChatGPTHotkey {
     static let command = "realtimeVoice"
     static let defaultKey = "Control+Alt+Command+V"
+    static let defaultKeySymbols = "⌃⌥⌘V"
 
     static var fileURL: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/keybindings.json")
     }
 
-    /// The shortcut ChatGPT has for voice chat, or nil if there's none (or it was cleared).
-    static func key(in data: Data?) -> String? {
-        guard let entries = bindings(in: data) else { return nil }
-        return entries.last { $0["command"] as? String == command }?["key"] as? String
+    enum Binding: Equatable {
+        /// ChatGPT has no voice hotkey (it ships without one).
+        case none
+        /// Someone removed it in ChatGPT's settings, which ChatGPT records as a null key.
+        case cleared
+        case set(String)
+        /// The file isn't the list of bindings ChatGPT writes.
+        case unreadable
     }
 
-    /// The file with the voice hotkey added, or nil when it should be left alone: the user
-    /// already set or cleared one, or the file isn't the list of bindings ChatGPT writes.
+    static func binding(in data: Data?) -> Binding {
+        guard let entries = bindings(in: data) else { return .unreadable }
+        guard let entry = entries.last(where: { $0["command"] as? String == command }) else { return .none }
+        return (entry["key"] as? String).map(Binding.set) ?? .cleared
+    }
+
+    /// The shortcut ChatGPT has for voice chat, or nil if there's none.
+    static func key(in data: Data?) -> String? {
+        if case .set(let key) = binding(in: data) { return key }
+        return nil
+    }
+
+    /// The file with the voice hotkey added, or nil unless ChatGPT has none: a hotkey you set
+    /// or cleared is left as it is, and so is a file Hey AI can't read.
     static func adding(_ key: String = defaultKey, to data: Data?) -> Data? {
-        guard var entries = bindings(in: data),
-              !entries.contains(where: { $0["command"] as? String == command }) else { return nil }
+        guard binding(in: data) == .none, var entries = bindings(in: data) else { return nil }
         entries.append(["command": command, "key": key])
         return try? JSONSerialization.data(withJSONObject: entries, options: [.prettyPrinted, .sortedKeys])
     }

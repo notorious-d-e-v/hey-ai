@@ -142,8 +142,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         if keepScreenAwake { setKeepScreenAwake(true) }
-        // ChatGPT's Voice Chat hotkey starts and stops voice from any app; see ChatGPTHotkey.
-        DispatchQueue.global().async { Launcher.addChatGPTHotkey() }
 
         Log.info("Hey AI started")
         updateIcon()
@@ -160,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         setup.isPaused = paused
         setup.onCanListen = { [weak self] in self?.startListeningIfPossible() }
+        setup.onRestartChatGPT = { [weak self] in self?.restartChatGPT() }
         setup.onFinish = { [weak self] in self?.finishSetup() }
         // Closing the window once everything is allowed counts as done; closing it
         // earlier leaves setup to finish next time.
@@ -178,6 +177,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // window asks for them, so the system prompts appear with an explanation.
         if setup.canListen && !paused { listener.start() }
         if !setupDone || !setup.allGranted { showSetup() }
+        setUpChatGPTHotkey()
+    }
+
+    // MARK: ChatGPT's voice hotkey
+
+    /// ChatGPT's Voice Chat hotkey starts and stops ChatGPT voice from any app (see
+    /// ChatGPTHotkey). Use the one you set; if there's none, add ⌃⌥⌘V and, since ChatGPT
+    /// only reads it when it starts, offer to restart ChatGPT.
+    private func setUpChatGPTHotkey() {
+        DispatchQueue.global().async {
+            let result = Launcher.setUpChatGPTHotkey()
+            DispatchQueue.main.async { self.chatGPTHotkeySetUp(result) }
+        }
+    }
+
+    private func chatGPTHotkeySetUp(_ result: Launcher.HotkeySetup) {
+        switch result {
+        case .unavailable:
+            return
+        case .yours(let key, true):
+            Log.info("ChatGPT voice hotkey: using yours (\(key))")
+        case .yours(let key, false):
+            Log.info("ChatGPT voice hotkey: yours (\(key)) is a key Hey AI can't press, so it uses ⌃⇧V")
+        case .cleared:
+            Log.info("ChatGPT voice hotkey: removed in ChatGPT's settings, so Hey AI uses ⌃⇧V")
+        case .unreadable:
+            Log.info("ChatGPT voice hotkey: couldn't read ~/.codex/keybindings.json, so Hey AI left it alone and uses ⌃⇧V")
+        case .failed(let error):
+            Log.info("ChatGPT voice hotkey: couldn't add it: \(error)")
+        case .added:
+            let symbols = ChatGPTHotkey.defaultKeySymbols
+            guard Launcher.running(Launcher.codexBundleID) != nil else {
+                // ChatGPT reads it the next time it opens.
+                Log.info("ChatGPT voice hotkey: added \(symbols)")
+                lastAction = "Turned on ChatGPT's voice hotkey (\(symbols))"
+                return
+            }
+            Log.info("ChatGPT voice hotkey: added \(symbols); it kicks in when ChatGPT restarts")
+            lastAction = "ChatGPT's voice hotkey (\(symbols)) kicks in the next time ChatGPT restarts"
+            if setupWindow != nil {
+                setup.chatgptNeedsRestart = true
+            } else {
+                askToRestartChatGPT()
+            }
+        }
+    }
+
+    private func askToRestartChatGPT() {
+        let symbols = ChatGPTHotkey.defaultKeySymbols
+        let alert = NSAlert()
+        alert.messageText = "Restart ChatGPT to turn on its voice hotkey?"
+        alert.informativeText = "Hey AI set ChatGPT's Voice Chat hotkey to \(symbols), so it can start and stop ChatGPT voice from any app. ChatGPT picks it up when it restarts, which ends anything it's in the middle of.\n\nIf you choose Later, it kicks in the next time ChatGPT restarts."
+        alert.addButton(withTitle: "Restart ChatGPT")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            restartChatGPT()
+        } else {
+            Log.info("ChatGPT voice hotkey: restart later")
+        }
+    }
+
+    private func restartChatGPT() {
+        setup.chatgptNeedsRestart = false
+        launcher.restartChatGPT { [weak self] result in
+            Log.info(result)
+            DispatchQueue.main.async { self?.report(result) }
+        }
     }
 
     /// Starts listening when it should be and isn't; safe to call often. After a failure

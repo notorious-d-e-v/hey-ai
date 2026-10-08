@@ -257,6 +257,10 @@ check(ChatGPTHotkey.key(in: data(#"[{"command":"realtimeVoice","key":"Control+Al
 check(ChatGPTHotkey.key(in: data(#"[{"command":"realtimeVoice","key":null}]"#)) == nil, "hotkey: cleared")
 check(ChatGPTHotkey.key(in: data(#"[{"command":"newTask","key":"CmdOrCtrl+N"}]"#)) == nil, "hotkey: other bindings only")
 check(ChatGPTHotkey.key(in: data("not json")) == nil, "hotkey: unreadable file")
+check(ChatGPTHotkey.binding(in: nil) == .none, "binding: no file")
+check(ChatGPTHotkey.binding(in: data(#"[{"command":"realtimeVoice","key":null}]"#)) == .cleared, "binding: cleared")
+check(ChatGPTHotkey.binding(in: data(#"[{"command":"realtimeVoice","key":"Ctrl+Alt+K"}]"#)) == .set("Ctrl+Alt+K"), "binding: set")
+check(ChatGPTHotkey.binding(in: data("not json")) == .unreadable, "binding: unreadable")
 func added(_ json: String?) -> [[String: String?]]? {
     guard let out = ChatGPTHotkey.adding(to: data(json)),
           let list = try? JSONSerialization.jsonObject(with: out) as? [[String: Any]] else { return nil }

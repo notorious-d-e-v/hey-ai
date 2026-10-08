@@ -7,7 +7,7 @@ import ApplicationServices
 ///   voice chat (ChatGPT Classic has no voice mode any more) with its Voice Chat hotkey,
 ///   which works from any app (see `ChatGPTHotkey`). Until ChatGPT has read that hotkey,
 ///   Hey AI brings ChatGPT forward and presses ⌃⇧V, its in-app "start voice chat" shortcut.
-///   Codex also brings ChatGPT forward.
+///   "Hey Codex" is another name for the same voice chat.
 /// - Claude ("Hey Claude"): `claude://claude.ai/new` opens a new chat, then the composer's
 ///   "Use voice mode" button is pressed through Accessibility.
 /// - Claude Code ("Hey Claude Code"): `claude://code/new` opens a new session in the desktop
@@ -41,10 +41,10 @@ final class Launcher {
     func open(_ target: WakeTarget, completion: @escaping (Result) -> Void) {
         queue.async {
             switch target {
-            // Every voice chat starts in a new chat of its own, so neither needs one opened
-            // first. Both start the same voice chat; Codex also shows ChatGPT.
-            case .chatgpt: completion(Result(message: self.startVoiceChat(name: "ChatGPT", bringForward: false)))
-            case .codex: completion(Result(message: self.startVoiceChat(name: "Codex", bringForward: true)))
+            // Every voice chat starts in a new chat of its own, and it's the same voice chat
+            // (ChatGPT's agent, which can hand work to Codex) whichever name you use.
+            case .chatgpt: completion(Result(message: self.startVoiceChat(name: "ChatGPT")))
+            case .codex: completion(Result(message: self.startVoiceChat(name: "Codex")))
             case .claude: completion(Result(message: self.openClaudeVoice()))
             case .claudeCode: completion(self.openClaudeCodeDictation())
             }
@@ -180,7 +180,7 @@ final class Launcher {
 
     /// Starts a ChatGPT voice chat: with the Voice Chat hotkey when ChatGPT has it, otherwise
     /// by bringing ChatGPT forward and pressing ⌃⇧V.
-    private func startVoiceChat(name: String, bringForward: Bool) -> String {
+    private func startVoiceChat(name: String) -> String {
         let bundleID = Self.codexBundleID
         guard Self.isInstalled(bundleID) else { return "ChatGPT isn't installed (Hey AI needs the current ChatGPT app)" }
         guard AXIsProcessTrusted() else {
@@ -193,7 +193,6 @@ final class Launcher {
         if chatgptStartPending { return "\(name): still starting the last voice chat" }
 
         if let hotkey = Self.chatgptHotkey() {
-            if bringForward { Self.activate(bundleID) }
             Keys.press(hotkey.key, flags: hotkey.flags)
         } else {
             let wasRunning = Self.running(bundleID) != nil
@@ -229,22 +228,61 @@ final class Launcher {
         return hotkey
     }
 
-    /// Gives ChatGPT a Voice Chat hotkey if it has none and the user never cleared one. Takes
-    /// effect the next time ChatGPT starts.
-    static func addChatGPTHotkey() {
-        guard isInstalled(codexBundleID) else { return }
+    /// What `setUpChatGPTHotkey` found or did.
+    enum HotkeySetup: Equatable {
+        /// ChatGPT isn't installed or set up yet; try again next launch.
+        case unavailable
+        /// You set one in ChatGPT. `usable` is false for a key Hey AI can't press (say, a
+        /// function key or a modifier on its own), and then ⌃⇧V is used instead.
+        case yours(String, usable: Bool)
+        /// You removed it in ChatGPT's settings, so Hey AI leaves it off and uses ⌃⇧V.
+        case cleared
+        /// The keybindings file isn't one Hey AI can safely edit.
+        case unreadable
+        /// Hey AI added it just now. ChatGPT picks it up when it next starts.
+        case added
+        case failed(String)
+    }
+
+    /// Uses the Voice Chat hotkey you set in ChatGPT, or adds one if ChatGPT has none.
+    static func setUpChatGPTHotkey() -> HotkeySetup {
         let url = ChatGPTHotkey.fileURL
-        // No ~/.codex yet: ChatGPT hasn't been set up, so try again next launch.
-        guard FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) else { return }
-        guard let data = ChatGPTHotkey.adding(to: try? Data(contentsOf: url)) else { return }
-        do {
-            try data.write(to: url, options: .atomic)
-            UserDefaults.standard.set(ChatGPTHotkey.defaultKey, forKey: "chatgptHotkeyAdded")
-            UserDefaults.standard.set(Date(), forKey: "chatgptHotkeyAddedAt")
-            Log.info("added ChatGPT's Voice Chat hotkey (\(ChatGPTHotkey.defaultKey)); it works once ChatGPT restarts")
-        } catch {
-            Log.info("couldn't add ChatGPT's Voice Chat hotkey: \(error.localizedDescription)")
+        // No ~/.codex yet: ChatGPT isn't installed or hasn't been opened.
+        guard isInstalled(codexBundleID),
+              FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) else { return .unavailable }
+        let data = try? Data(contentsOf: url)
+        switch ChatGPTHotkey.binding(in: data) {
+        case .set(let key): return .yours(key, usable: ChatGPTHotkey.parse(key) != nil)
+        case .cleared: return .cleared
+        case .unreadable: return .unreadable
+        case .none: break
         }
+        guard let updated = ChatGPTHotkey.adding(to: data) else { return .unreadable }
+        do {
+            try updated.write(to: url, options: .atomic)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        UserDefaults.standard.set(ChatGPTHotkey.defaultKey, forKey: "chatgptHotkeyAdded")
+        UserDefaults.standard.set(Date(), forKey: "chatgptHotkeyAddedAt")
+        return .added
+    }
+
+    /// Quits ChatGPT and opens it again, so it reads the voice hotkey Hey AI added.
+    func restartChatGPT(completion: @escaping (String) -> Void) {
+        queue.async { completion(Self.restart(Self.codexBundleID, name: "ChatGPT")) }
+    }
+
+    static func restart(_ bundleID: String, name: String) -> String {
+        guard let app = running(bundleID) else { return "\(name) isn't open. Its voice hotkey works once you open it." }
+        let pid = app.processIdentifier
+        app.terminate()
+        // It may ask you to confirm first, say while it's working on something.
+        let deadline = Date().addingTimeInterval(30)
+        while kill(pid, 0) == 0, Date() < deadline { Thread.sleep(forTimeInterval: 0.2) }
+        guard kill(pid, 0) != 0 else { return "\(name) didn't quit, so its voice hotkey kicks in the next time it restarts" }
+        guard activate(bundleID) else { return "\(name) quit but didn't open again. Open it to turn on its voice hotkey." }
+        return "Restarted \(name). Its voice hotkey is on."
     }
 
     /// How long a ChatGPT voice chat Hey AI asked for gets to take the mic before another

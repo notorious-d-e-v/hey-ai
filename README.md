@@ -30,13 +30,24 @@ Get `Hey-AI.zip` from [Releases](https://github.com/notorious-d-e-v/hey-ai/relea
 
 | Say | What happens |
 | --- | --- |
-| **“Hey Chatty”** | ChatGPT opens a new voice chat. |
-| **“Hey Codex”** | Codex opens a new voice chat in your current project. |
+| **“Hey Chatty”** | ChatGPT starts a new voice chat, right where you are. You don't have to switch to ChatGPT. |
+| **“Hey Codex”** | Starts the same voice chat. ChatGPT's voice agent can hand work to Codex. |
 | **“Hey Claude”** | Claude opens a new chat in voice mode. |
 | **“Hey Claude Code”** | A new Claude Code session opens in the Claude app, already dictating. Finish with **“send it”**, or pause and say **“yes”**. |
 | **“Stop listening”** | Ends whatever voice chat is open, right away. |
 
 While ChatGPT or Claude is already listening, Hey AI ignores wake phrases, so talking to your assistant never opens a second one.
+
+### ChatGPT's voice hotkey
+
+ChatGPT has a *Voice Chat hotkey* (**Settings → Keyboard shortcuts**) that starts and stops a voice chat from any app. It has no default.
+
+- **You already set one:** Hey AI uses it.
+- **You haven't:** Hey AI sets it to **⌃⌥⌘V** by adding one entry to `~/.codex/keybindings.json`, and leaves everything else in that file alone.
+- **When it starts working:** ChatGPT reads the hotkey when it starts, so Hey AI offers to restart ChatGPT. If you'd rather not, it kicks in the next time ChatGPT restarts.
+- **Until then:** Hey AI brings ChatGPT forward and presses ⌃⇧V, ChatGPT's in-app voice shortcut. That shortcut only works with ChatGPT in front.
+
+You can change or remove the hotkey in ChatGPT's settings at any time. If you remove it, Hey AI won't add it back.
 
 ### Sending a Claude Code prompt
 
@@ -63,11 +74,11 @@ Hey AI removes the spoken command from the prompt before pressing Return. A paus
 | --- | --- |
 | Microphone | To hear the wake phrase. |
 | Speech Recognition | To turn speech into text, on your Mac. |
-| Accessibility | ChatGPT and Claude have no “start voice” link. After a wake phrase, Hey AI opens a new chat and sends the app's own shortcut (⌃⇧V in ChatGPT, ⌘D in Claude Code) or presses Claude's voice button. |
+| Accessibility | ChatGPT and Claude have no “start voice” link. After a wake phrase, Hey AI presses the app's own shortcut (ChatGPT's voice hotkey, ⌘D in Claude Code) or Claude's voice button. |
 
 The setup window asks for all three in one pass. macOS doesn't let apps switch Accessibility on themselves, so you flip one switch in the list it opens, which needs an administrator's password.
 
-Accessibility is a broad permission: it would let an app read and control any window. Hey AI only acts on ChatGPT and Claude, only after a wake phrase, and checks that the app is still in front before every key press or click. All of it is in [`Sources/Launcher.swift`](Sources/Launcher.swift).
+Accessibility is a broad permission: it would let an app read and control any window. Hey AI only acts on ChatGPT and Claude, and only after a wake phrase. Before every key press it sends to an app, it checks that the app is still in front. The exception is ChatGPT's voice hotkey, which works from any app. All of it is in [`Sources/Launcher.swift`](Sources/Launcher.swift).
 
 ## Menu
 
@@ -81,7 +92,7 @@ Click the quote mark in the menu bar to see whether Hey AI is listening, pause i
 - **Listening.** `SFSpeechRecognizer` in on-device mode runs over the microphone. Recognition restarts every 50 seconds and after each wake phrase, so an old phrase can never fire twice. Common mishearings are accepted (“chati”, “cloud”, “clawed”, “codecs”). See [`Sources/WakeMatcher.swift`](Sources/WakeMatcher.swift).
 - **Claude.** Opens `claude://claude.ai/new`, then presses the composer's *Use voice mode* button through Accessibility.
 - **Claude Code.** Opens `claude://code/new`, then presses ⌘D, Claude's dictation shortcut.
-- **ChatGPT and Codex.** Brings the ChatGPT app forward, opens a new chat (⌘⌥O for a standalone chat, ⌘N for one in your project), then presses ⌃⇧V, the app's own voice shortcut.
+- **ChatGPT and Codex.** Presses ChatGPT's Voice Chat hotkey, which starts a voice chat (or stops or cancels one) without bringing ChatGPT forward. Until ChatGPT has the hotkey, Hey AI brings it forward and presses ⌃⇧V instead. See [`Sources/ChatGPTHotkey.swift`](Sources/ChatGPTHotkey.swift).
 - **Already listening?** Core Audio reports which processes are using the microphone. If ChatGPT or Claude is, wake phrases are ignored.
 
 </details>
