@@ -71,7 +71,7 @@ Accessibility is a broad permission: it would let an app read and control any wi
 
 ## Menu
 
-Click the quote mark in the menu bar to pause listening, run any action without speaking (Test), open setup again or choose whether it starts at login.
+Click the quote mark in the menu bar to see whether Hey AI is listening, pause it, open setup again or choose whether it starts at login. Each phrase in the menu is also a button: click “Hey Chatty” to open ChatGPT voice without saying a word.
 
 **Keep Screen Awake** stops the display from sleeping, so your Mac doesn't lock on its own and wake phrases keep working while you step away. It also means an unattended Mac stays unlocked, so only turn it on where that's fine.
 
@@ -89,7 +89,7 @@ Click the quote mark in the menu bar to pause listening, run any action without 
 <details>
 <summary>Troubleshooting</summary>
 
-- **Nothing happens when I talk.** The menu should say *Listening (on-device)*. If it says on-device speech isn't available, turn on Dictation in **System Settings → Keyboard** so macOS downloads it.
+- **Nothing happens when I talk.** The menu should say *Listening on-device*. If it says on-device speech isn't available, turn on Dictation in **System Settings → Keyboard** so macOS downloads it.
 - **The app opens but voice doesn't start.** Check that Hey AI is switched on under **System Settings → Privacy & Security → Accessibility**. If it is, ChatGPT or Claude may have changed its layout. Choose **Test → Write Claude Controls to Log** and open an issue with the log.
 - **It doesn't work while my Mac is locked.** macOS doesn't let any app drive other apps behind the lock screen. **Keep Screen Awake** stops the display from sleeping so the Mac doesn't lock on its own, which leaves an unattended Mac unlocked.
 - **I can't see the quote mark in the menu bar.** On a MacBook with a notch, macOS hides menu-bar icons behind the notch when there isn't room. Hey AI keeps listening either way. Hold ⌘ and drag a few icons off the menu bar to make room, or open Hey AI from Applications to see its window.

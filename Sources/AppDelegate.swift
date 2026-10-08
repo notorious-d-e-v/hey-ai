@@ -20,7 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var setupChanges: AnyCancellable?
 
     private var listenerState: WakeListener.State = .stopped
-    private var lastAction = ""
+    private var lastAction = "" { didSet { lastActionAt = Date() } }
+    private var lastActionAt = Date.distantPast
     private var flashUntil = Date.distantPast
 
     private let defaults = UserDefaults.standard
@@ -464,36 +465,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        menu.addItem(info(statusLine))
+        if !setup.allGranted {
+            menu.addItem(item("Finish Setting Up Hey AI…", #selector(showSetup)))
+            menu.addItem(.separator())
+        }
         if listener.isWatchingForSend {
-            menu.addItem(info("Dictating to Claude Code. Say “yes” or “send it” to send."))
             menu.addItem(item("Send Now", #selector(sendNow)))
             menu.addItem(item("Don’t Send", #selector(stopWaitingForSend)))
+            menu.addItem(.separator())
         }
-        menu.addItem(info("“Hey Chatty” → ChatGPT voice"))
-        menu.addItem(info("“Hey Codex” → Codex voice"))
-        menu.addItem(info("“Hey Claude” → Claude voice"))
-        menu.addItem(info("“Hey Claude Code” → Claude Code dictation"))
-        if !lastAction.isEmpty { menu.addItem(info("Last: \(lastAction)")) }
+
+        // Each phrase also works as a button, for when talking isn't an option.
+        menu.addItem(.sectionHeader(title: "Say"))
+        for target in [WakeTarget.chatgpt, .codex, .claude, .claudeCode] {
+            let row = phrase(target.wakePhrase, target.displayName, #selector(testTarget(_:)))
+            row.representedObject = target.rawValue
+            row.toolTip = "Opens \(target.displayName) now."
+            menu.addItem(row)
+        }
+        let canStop = listener.isWatchingForSend || MicActivity.assistantListening() != nil
+        let stop = phrase("stop listening", "Ends a voice chat", #selector(stopListeningNow), enabled: canStop)
+        if !canStop { stop.toolTip = "Nothing is listening right now." }
+        menu.addItem(stop)
 
         menu.addItem(.separator())
         menu.addItem(item(paused ? "Resume Listening" : "Pause Listening", #selector(togglePause)))
 
-        let testMenu = NSMenu()
-        for target in WakeTarget.allCases {
-            let entry = item("Open \(target.displayName) Now", #selector(testTarget(_:)))
-            entry.representedObject = target.rawValue
-            testMenu.addItem(entry)
-        }
-        testMenu.addItem(.separator())
-        testMenu.addItem(item("Write Claude Controls to Log", #selector(dumpClaude)))
-        testMenu.addItem(item("Open Log", #selector(openLog)))
-        let testItem = NSMenuItem(title: "Test", action: nil, keyEquivalent: "")
-        testItem.submenu = testMenu
-        menu.addItem(testItem)
-
         menu.addItem(.separator())
-        menu.addItem(item(setup.allGranted ? "Set Up Hey AI…" : "Finish Setting Up Hey AI…", #selector(showSetup)))
         let login = item("Launch at Login", #selector(toggleLaunchAtLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
@@ -507,24 +505,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(server)
 
         menu.addItem(.separator())
+        if setup.allGranted { menu.addItem(item("Set Up Hey AI…", #selector(showSetup))) }
+        let troubleshooting = NSMenu()
+        troubleshooting.addItem(item("Open Log", #selector(openLog)))
+        troubleshooting.addItem(item("Write Claude Controls to Log", #selector(dumpClaude)))
+        let troubleshootingItem = NSMenuItem(title: "Troubleshooting", action: nil, keyEquivalent: "")
+        troubleshootingItem.submenu = troubleshooting
+        menu.addItem(troubleshootingItem)
         menu.addItem(item("Quit Hey AI", #selector(quit), key: "q"))
+
+        // Last, so it can match the width of everything else.
+        menu.insertItem(.separator(), at: 0)
+        menu.insertItem(header.menuItem(width: menu.size.width), at: 0)
     }
 
-    private var statusLine: String {
-        if paused { return "Paused" }
-        if !setup.canListen { return "Needs microphone and speech recognition. Open setup below." }
+    private var header: MenuHeader {
+        let detail: String?
+        if listener.isWatchingForSend {
+            detail = "Say “yes” or “send it” to send."
+        } else if !lastAction.isEmpty {
+            let ago = RelativeDateTimeFormatter()
+            ago.unitsStyle = .full
+            detail = Date().timeIntervalSince(lastActionAt) < 60
+                ? lastAction : "\(lastAction), \(ago.localizedString(for: lastActionAt, relativeTo: Date()))"
+        } else {
+            detail = nil
+        }
+        if paused { return MenuHeader(status: "Paused", tone: .off, detail: detail) }
+        if !setup.canListen { return MenuHeader(status: "Needs microphone and speech recognition", tone: .problem, detail: nil) }
+        if listener.isWatchingForSend { return MenuHeader(status: "Dictating to Claude Code", tone: .on, detail: detail) }
         switch listenerState {
-        case .stopped: return "Starting…"
-        case .listening(let onDevice): return onDevice ? "Listening (on-device)" : "Listening (online)"
-        case .failed(let message): return message
+        case .stopped: return MenuHeader(status: "Starting…", tone: .off, detail: detail)
+        case .listening(let onDevice):
+            return MenuHeader(status: onDevice ? "Listening on-device" : "Listening, with online recognition", tone: .on, detail: detail)
+        case .failed(let message): return MenuHeader(status: message, tone: .problem, detail: nil)
         }
     }
 
-    private func info(_ title: String) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
+    /// A phrase you can say, highlighted per the brand, followed by what it does.
+    /// Attributed titles don't dim when disabled, so a disabled row fades itself.
+    private func phrase(_ words: String, _ does: String, _ action: Selector, enabled: Bool = true) -> NSMenuItem {
+        let row = item(words, action)
+        row.isEnabled = enabled
+        let font = NSFont.menuFont(ofSize: 0)
+        let pill = NSTextAttachment()
+        // Menus are rebuilt each time they open, so this follows light and dark mode.
+        let dark = (menu.appearance ?? NSApp.effectiveAppearance).bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        pill.image = Brand.phrasePill("“\(words)”", size: font.pointSize - 1, inactive: !enabled, dark: dark)
+        let size = pill.image!.size
+        pill.bounds = CGRect(x: 0, y: (font.capHeight - size.height) / 2, width: size.width, height: size.height)
+        let title = NSMutableAttributedString(attachment: pill)
+        var attributes: [NSAttributedString.Key: Any] = [.font: font]
+        attributes[.foregroundColor] = enabled ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor
+        title.append(NSAttributedString(string: "  \(does)", attributes: attributes))
+        row.attributedTitle = title
+        return row
     }
+
+    @objc private func stopListeningNow() { stopListening() }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
