@@ -216,6 +216,20 @@ check(!activity.isSpeech(level: -52), "speech: room noise isn't speech")
 check(activity.isSpeech(level: -30), "speech: talking is")
 check(!activity.isSpeech(level: -56), "speech: back to quiet")
 
+// "stop listening" typed into the prompt by Claude's dictation
+func stopTail(_ text: String, _ expected: String) {
+    let got = String(text.dropLast(StopPhrase.trailingLength(text))).trimmingCharacters(in: .whitespacesAndNewlines)
+    check(got == expected, "stop strip: \"\(text)\" → \"\(got)\", expected \"\(expected)\"")
+}
+stopTail("Add a dark mode toggle. Stop listening.", "Add a dark mode toggle.")
+stopTail("Add a dark mode toggle stop listening", "Add a dark mode toggle")
+stopTail("Stop listening.", "")
+stopTail("Fix the login bug, stop listening", "Fix the login bug")
+stopTail("Fix the login bug. Stop listing.", "Fix the login bug.")
+stopTail("End the voice chat.", "")
+stopTail("Add a dark mode toggle.", "Add a dark mode toggle.")
+stopTail("Stop listening to the queue", "Stop listening to the queue")
+
 // What the menu shows for a result
 func menu(_ result: String, _ expected: String) {
     check(MenuText.forResult(result) == expected, "menu: \"\(result)\" → \"\(MenuText.forResult(result))\", expected \"\(expected)\"")

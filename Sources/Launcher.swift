@@ -110,10 +110,34 @@ final class Launcher {
     func stopClaudeCodeDictation(completion: @escaping (String) -> Void) {
         queue.async {
             self.codeSession = nil
-            completion(self.stopClaudeCodeDictationNow()
-                ? "Claude Code: stopped dictating (prompt not sent)"
-                : "Claude Code: couldn't stop dictation")
+            guard self.stopClaudeCodeDictationNow() else { return completion("Claude Code: couldn't stop dictation") }
+            completion(self.removeStopPhraseFromPrompt() ?? "Claude Code: stopped dictating (prompt not sent)")
         }
+    }
+
+    /// Claude's dictation types "stop listening" into the prompt before Hey AI hears it and
+    /// stops dictation, so delete it again. nil when there was nothing to delete or it worked.
+    private func removeStopPhraseFromPrompt() -> String? {
+        guard let reader = Self.claudeReader(),
+              let composer = reader.findCodeComposer(requireNewSession: false) else { return nil }
+        // The last words land in the prompt a moment after dictation stops.
+        let text = reader.waitForStableText(composer.textArea.element, settle: 0.8, timeout: 4)
+        let trailing = StopPhrase.trailingLength(text)
+        guard trailing > 0 else { return nil }
+        let expected = String(text.dropLast(trailing)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let claude = Self.claudeBundleID
+        let switched = "Claude Code: stopped dictating, but you switched apps, so “stop listening” is still in the prompt"
+        reader.focus(composer.textArea.element)
+        guard Keys.press(Keys.downArrow, flags: .maskCommand, in: claude) else { return switched } // caret to the end
+        for _ in 0..<trailing {
+            guard Keys.press(Keys.delete, flags: [], in: claude) else { return switched }
+        }
+        Thread.sleep(forTimeInterval: 0.3)
+        let edited = reader.text(of: composer.textArea.element).trimmingCharacters(in: .whitespacesAndNewlines)
+        if edited != expected {
+            Log.info("Claude Code: expected \(expected.count) chars after removing “stop listening”, found \(edited.count)")
+        }
+        return nil
     }
 
     func dumpClaudeControls(completion: @escaping (String) -> Void) {

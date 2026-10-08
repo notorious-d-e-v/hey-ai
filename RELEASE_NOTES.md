@@ -1,4 +1,4 @@
-**New in 1.0.11:** “Hey Claude Code” is told apart from “Hey Claude” more reliably: if you're still talking when the recognizer is slow to deliver “Code”, Hey AI waits for it. And “stop listening” presses Claude's Stop button again if Claude ignored the first press.
+**New in 1.0.12:** saying “stop listening” while dictating to Claude Code no longer leaves “stop listening” typed in the prompt; Hey AI deletes it after dictation stops.
 
 Say an assistant's name and it opens, ready to talk.
 

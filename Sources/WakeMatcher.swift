@@ -190,7 +190,8 @@ enum SendPhrase {
     /// How many characters at the end of the dictated text are the spoken command (plus the
     /// spaces and commas before it); 0 when the text doesn't end with it. Close spellings
     /// count ("Inter." for "enter"), since Claude's dictation hears words its own way.
-    static func trailingLength(_ text: String, command: [String]) -> Int {
+    /// `looser` allows two letters off in words of 7 or more letters ("listing" for "listening").
+    static func trailingLength(_ text: String, command: [String], looser: Bool = false) -> Int {
         guard !command.isEmpty, let regex = try? NSRegularExpression(pattern: #"[\p{L}\p{N}']+"#) else { return 0 }
         let tokens = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
             .compactMap { Range($0.range, in: text) }
@@ -198,7 +199,8 @@ enum SendPhrase {
         let tail = Array(tokens.suffix(command.count))
         for (range, expected) in zip(tail, command) {
             let word = WakeMatcher.normalize(String(text[range])).joined()
-            guard word == expected || (expected.count >= 4 && WakeMatcher.levenshtein(word, expected) <= 1) else {
+            let allowed = looser && expected.count >= 7 ? 2 : (expected.count >= 4 ? 1 : 0)
+            guard word == expected || (allowed > 0 && WakeMatcher.levenshtein(word, expected) <= allowed) else {
                 return 0
             }
         }
@@ -235,6 +237,12 @@ enum StopPhrase {
     /// prompt that happens to end "…then hang up" doesn't stop it.
     static func isWhole(_ utterance: [String]) -> Bool {
         phrases.contains(utterance)
+    }
+
+    /// How many characters at the end of dictated text are a stop phrase (the longest one
+    /// that fits), so it can be deleted from the prompt; 0 if it doesn't end with one.
+    static func trailingLength(_ text: String) -> Int {
+        phrases.map { SendPhrase.trailingLength(text, command: $0, looser: true) }.max() ?? 0
     }
 }
 
