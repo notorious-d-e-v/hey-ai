@@ -1,4 +1,4 @@
-**New in 1.0.1:** the setup window lists ChatGPT first. Otherwise the same as 1.0.0.
+**New in 1.0.2:** on a full menu bar, macOS used to hide Hey AI's quote mark behind the notch. It now starts just left of Control Center so you can see it (⌘-drag it anywhere; macOS remembers), and setup tells you if macOS hides it anyway.
 
 Say an assistant's name and it opens, ready to talk.
 

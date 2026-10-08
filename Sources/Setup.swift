@@ -20,6 +20,8 @@ final class SetupModel: ObservableObject {
     @Published var lastHeard: String?
     /// Why Hey AI isn't listening, if it isn't.
     @Published var listenerProblem: String?
+    /// macOS hid the menu-bar icon (the menu bar is full).
+    @Published var menuBarIconHidden = false
     /// Whether the microphone is actually being listened to right now.
     @Published var isListening = false
     @Published var isPaused = false
@@ -331,7 +333,9 @@ private struct ReadyView: View {
 
             HStack(alignment: .top, spacing: 8) {
                 BrandMark().fill(Brand.ink).frame(width: 15, height: 11).padding(.top, 3)
-                Text("Hey AI lives in your menu bar. Click the quote mark to pause it or quit.")
+                Text(model.menuBarIconHidden
+                     ? "Your menu bar is full, so macOS is hiding Hey AI's quote mark behind the notch. Hold ⌘ and drag a few icons off the menu bar to make room. Hey AI keeps listening either way."
+                     : "Hey AI lives in your menu bar. Click the quote mark to pause it or quit.")
                     .font(.system(size: 12.5))
                     .foregroundColor(Brand.graphite)
                     .fixedSize(horizontal: false, vertical: true)
