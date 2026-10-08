@@ -19,6 +19,7 @@ enum ChatGPTHotkey {
         /// ChatGPT has no voice hotkey (it ships without one).
         case none
         /// Someone removed it in ChatGPT's settings, which ChatGPT records as a null key.
+        /// Hey AI sets it again: having Hey AI means wanting the hotkey.
         case cleared
         case set(String)
         /// The file isn't the list of bindings ChatGPT writes.
@@ -37,10 +38,13 @@ enum ChatGPTHotkey {
         return nil
     }
 
-    /// The file with the voice hotkey added, or nil unless ChatGPT has none: a hotkey you set
-    /// or cleared is left as it is, and so is a file Hey AI can't read.
+    /// The file with the voice hotkey added, or nil when ChatGPT already has one (yours is
+    /// kept) or the file isn't one Hey AI can read (it's left alone). A hotkey removed in
+    /// ChatGPT's settings is set again.
     static func adding(_ key: String = defaultKey, to data: Data?) -> Data? {
-        guard binding(in: data) == .none, var entries = bindings(in: data) else { return nil }
+        let current = binding(in: data)
+        guard current == .none || current == .cleared, var entries = bindings(in: data) else { return nil }
+        entries.removeAll { $0["command"] as? String == command }
         entries.append(["command": command, "key": key])
         return try? JSONSerialization.data(withJSONObject: entries, options: [.prettyPrinted, .sortedKeys])
     }

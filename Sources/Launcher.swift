@@ -235,8 +235,6 @@ final class Launcher {
         /// You set one in ChatGPT. `usable` is false for a key Hey AI can't press (say, a
         /// function key or a modifier on its own), and then ⌃⇧V is used instead.
         case yours(String, usable: Bool)
-        /// You removed it in ChatGPT's settings, so Hey AI leaves it off and uses ⌃⇧V.
-        case cleared
         /// The keybindings file isn't one Hey AI can safely edit.
         case unreadable
         /// Hey AI added it just now. ChatGPT picks it up when it next starts.
@@ -244,7 +242,8 @@ final class Launcher {
         case failed(String)
     }
 
-    /// Uses the Voice Chat hotkey you set in ChatGPT, or adds one if ChatGPT has none.
+    /// Uses the Voice Chat hotkey you set in ChatGPT, or sets one if ChatGPT has none, including
+    /// when it was removed in ChatGPT's settings.
     static func setUpChatGPTHotkey() -> HotkeySetup {
         let url = ChatGPTHotkey.fileURL
         // No ~/.codex yet: ChatGPT isn't installed or hasn't been opened.
@@ -253,9 +252,8 @@ final class Launcher {
         let data = try? Data(contentsOf: url)
         switch ChatGPTHotkey.binding(in: data) {
         case .set(let key): return .yours(key, usable: ChatGPTHotkey.parse(key) != nil)
-        case .cleared: return .cleared
         case .unreadable: return .unreadable
-        case .none: break
+        case .none, .cleared: break
         }
         guard let updated = ChatGPTHotkey.adding(to: data) else { return .unreadable }
         do {

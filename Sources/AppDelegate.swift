@@ -201,8 +201,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Log.info("ChatGPT voice hotkey: using \(added ? "the one Hey AI added" : "yours") (\(key))")
         case .yours(let key, false):
             Log.info("ChatGPT voice hotkey: yours (\(key)) is a key Hey AI can't press, so it uses ⌃⇧V")
-        case .cleared:
-            Log.info("ChatGPT voice hotkey: removed in ChatGPT's settings, so Hey AI uses ⌃⇧V")
         case .unreadable:
             Log.info("ChatGPT voice hotkey: couldn't read ~/.codex/keybindings.json, so Hey AI left it alone and uses ⌃⇧V")
         case .failed(let error):

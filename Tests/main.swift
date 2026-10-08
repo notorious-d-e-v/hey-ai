@@ -270,7 +270,10 @@ check(added(nil)?.count == 1 && added(nil)?.first?["key"] == "Control+Alt+Comman
 check(added("  \n")?.count == 1, "add: empty file")
 check(added(#"[{"command":"newTask","key":"CmdOrCtrl+N"}]"#)?.count == 2, "add: keeps other bindings")
 check(added(#"[{"command":"realtimeVoice","key":"Control+Shift+Space"}]"#) == nil, "add: user already set one")
-check(added(#"[{"command":"realtimeVoice","key":null}]"#) == nil, "add: user cleared it")
+check(added(#"[{"command":"realtimeVoice","key":null}]"#).map { $0.count == 1 && $0[0]["key"] == "Control+Alt+Command+V" } == true,
+      "add: removed in ChatGPT's settings is set again")
+check(added(#"[{"command":"newTask","key":"CmdOrCtrl+N"},{"command":"realtimeVoice","key":null}]"#)?.count == 2,
+      "add: set again, other bindings kept")
 check(added("{\"bindings\":[]}") == nil, "add: unknown shape is left alone")
 check(added("not json") == nil, "add: unreadable file is left alone")
 func accel(_ s: String, _ key: CGKeyCode?, _ flags: CGEventFlags = []) {

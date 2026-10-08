@@ -47,7 +47,7 @@ ChatGPT has a *Voice Chat hotkey* (**Settings → Keyboard shortcuts**) that sta
 - **When it starts working:** ChatGPT reads the hotkey when it starts, so Hey AI offers to restart ChatGPT. If you'd rather not, it kicks in the next time ChatGPT restarts.
 - **Until then:** Hey AI brings ChatGPT forward and presses ⌃⇧V, ChatGPT's in-app voice shortcut. That shortcut only works with ChatGPT in front.
 
-You can change or remove the hotkey in ChatGPT's settings at any time. If you remove it, Hey AI won't add it back.
+You can change the hotkey in ChatGPT's settings, and Hey AI uses your choice. If you remove it, Hey AI sets ⌃⌥⌘V again the next time it starts.
 
 ### Sending a Claude Code prompt
 
